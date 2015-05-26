@@ -168,7 +168,7 @@ class StreamingUploader(object):
 
     def chunk_frame(self, frame):
         records = []
-        for idx, row in frame.iterrows():
+        for _, row in frame.iterrows():
             record = dict(row)
             records.append(record)
         yield records
