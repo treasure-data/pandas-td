@@ -1,11 +1,15 @@
+import contextlib
 import gzip
 import os
 import StringIO
 import time
 import uuid
+import zlib
+
 import msgpack
 import numpy as np
 import pandas as pd
+import requests
 import tdclient
 
 import logging
@@ -14,13 +18,16 @@ logger = logging.getLogger(__name__)
 DEFAULT_ENDPOINT = 'https://api.treasuredata.com/'
 
 class Connection(object):
-    def __init__(self, apikey=None, endpoint=None, database=None):
+    def __init__(self, apikey=None, endpoint=None, database=None, type='presto'):
         if apikey is None:
             apikey = os.environ['TD_API_KEY']
         if endpoint is None:
             endpoint = DEFAULT_ENDPOINT
+        self.apikey = apikey
+        self.endpoint = endpoint
         self.client = tdclient.Client(apikey, endpoint)
         self.database = database
+        self.type = type
 
     def databases(self):
         databases = self.client.databases()
@@ -44,18 +51,88 @@ class Connection(object):
         else:
             return pd.DataFrame()
 
-def connect(apikey=None, endpoint=None, database=None):
-    return Connection(apikey, endpoint, database)
+    def query(self, query, **kwargs):
+        # parameters
+        if not kwargs.has_key('type') and self.type:
+            kwargs['type'] = self.type
 
-def read_td(query, connection):
-    return read_td_query(query, connection)
+        # issue query
+        job = self.client.query(self.database, query, **kwargs)
 
-def read_td_query(query, connection):
-    job = connection.client.query(connection.database, query, type='presto')
-    while not job.finished():
-        time.sleep(2)
-        job._update_status()
-    return pd.DataFrame(job.result(), columns=[c[0] for c in job._hive_result_schema])
+        # wait
+        while not job.finished():
+            time.sleep(1)
+            job._update_status()
+
+        # status check
+        if not job.success():
+            stderr = job._debug['stderr']
+            if stderr:
+                logger.error(stderr)
+            raise RuntimeError("job {0} {1}\n\nOutput:\n{2}".format(
+                job.job_id,
+                job.status(),
+                job._debug['cmdout']))
+
+        # result as DataFrame
+        return ResultProxy(self, job.job_id)
+
+class ResultProxy(object):
+    def __init__(self, connection, job_id):
+        self.connection = connection
+        self.job = connection.client.job(job_id)
+        self._iter = None
+
+    @property
+    def status(self):
+        return self.job.status()
+
+    @property
+    def size(self):
+        return self.job._result_size
+
+    @property
+    def description(self):
+        return self.job._hive_result_schema
+
+    def iter_content(self, chunk_size):
+        # start downloading
+        headers = {
+            'Authorization': 'TD1 {0}'.format(self.connection.apikey),
+            'Accept-Encoding': 'deflate, gzip',
+        }
+        r = requests.get('{endpoint}v3/job/result/{job_id}?format={format}'.format(
+            endpoint = self.connection.endpoint,
+            job_id = self.job.job_id,
+            format = 'msgpack.gz',
+        ), headers=headers, stream=True)
+
+        # content length
+        maxval = None
+        if 'Content-length' in r.headers:
+            maxval = long(r.headers['Content-length'])
+
+        # download
+        with contextlib.closing(r) as r:
+            d = zlib.decompressobj(16+zlib.MAX_WBITS)
+            for chunk in r.iter_content(chunk_size):
+                yield d.decompress(chunk)
+
+    def read(self, size=16384):
+        if self._iter is None:
+            self._iter = self.iter_content(size)
+        try:
+            return self._iter.next()
+        except StopIteration:
+            return ''
+
+    def __iter__(self):
+        for record in msgpack.Unpacker(self):
+            yield record
+
+    def to_dataframe(self):
+        columns = [c[0] for c in self.description]
+        return pd.DataFrame(iter(self), columns=columns)
 
 class StreamingUploader(object):
     def __init__(self, client, database, table):
@@ -110,6 +187,18 @@ class StreamingUploader(object):
         unique_id = uuid.uuid4()
         elapsed = self.client.import_data(database, table, 'msgpack.gz', data, data_size, unique_id)
         logger.debug('imported %d bytes in %.3f secs', data_size, elapsed)
+
+# utility functions
+
+def connect(apikey=None, endpoint=None, database=None, **kwargs):
+    return Connection(apikey, endpoint, database, **kwargs)
+
+def read_td(query, connection, **kwargs):
+    return read_td_query(query, connection, **kwargs)
+
+def read_td_query(query, connection, **kwargs):
+    r = connection.query(query, **kwargs)
+    return r.to_dataframe()
 
 def to_td(frame, table, connection, time='now'):
     '''

@@ -1,5 +1,9 @@
+from .td import Connection
+from .td import ResultProxy
 from .td import StreamingUploader
 
+import collections
+import datetime
 import gzip
 import msgpack
 import StringIO
@@ -9,7 +13,53 @@ import pandas as pd
 from unittest import TestCase
 from nose.tools import eq_, raises
 
+TestDatabase = collections.namedtuple('TestDatabase', ['name', 'count', 'permission', 'created_at', 'updated_at'])
+TestTable = collections.namedtuple('TestTable', ['name', 'count', 'estimated_storage_size', 'created_at', 'last_log_timestamp'])
+
 class TestClient(object):
+    def databases(self):
+        return [
+            TestDatabase(
+                name = 'test_db',
+                count = 0,
+                permission = 'administrator',
+                created_at = datetime.datetime(2015, 1, 1, 0, 0, 0),
+                updated_at = datetime.datetime(2015, 1, 1, 0, 0, 0),
+            )
+        ]
+
+    def tables(self, database):
+        return [
+            TestTable(
+                name = 'test_tbl',
+                count = 0,
+                estimated_storage_size = 0,
+                created_at = datetime.datetime(2015, 1, 1, 0, 0, 0),
+                last_log_timestamp = datetime.datetime(2015, 1, 1, 0, 0, 0),
+            )
+        ]
+
+class ConnectionTestCase(TestCase):
+    def setUp(self):
+        self.connection = Connection('test-key', 'test-endpoint', 'test_db')
+        self.connection.client = TestClient()
+
+    def test_databases(self):
+        d = self.connection.databases()
+        eq_(len(d), 1)
+        eq_(d.name[0], 'test_db')
+
+    def test_tables(self):
+        d = self.connection.tables()
+        eq_(len(d), 1)
+        eq_(d.name[0], 'test_tbl')
+
+    def test_tables_with_database(self):
+        d = self.connection.tables('test_db')
+        eq_(len(d), 1)
+        eq_(d.name[0], 'test_tbl')
+
+class ResultProxyTestCase(TestCase):
     pass
 
 class StreamingUploaderTestCase(TestCase):
