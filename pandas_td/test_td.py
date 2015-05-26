@@ -5,8 +5,8 @@ from .td import StreamingUploader
 import collections
 import datetime
 import gzip
+import io
 import msgpack
-import StringIO
 import numpy as np
 import pandas as pd
 
@@ -102,8 +102,8 @@ class StreamingUploaderTestCase(TestCase):
     def test_pack_gz(self):
         records = [{'x': 'a', 'y': 1}, {'x': 'b', 'y': 2}]
         data = self.uploader.pack_gz(records)
-        with gzip.GzipFile(fileobj=StringIO.StringIO(data)) as f:
-            for unpacked in msgpack.Unpacker(f):
+        with gzip.GzipFile(fileobj=io.BytesIO(data)) as f:
+            for unpacked in msgpack.Unpacker(f, encoding='utf-8'):
                 eq_(unpacked, records[0])
                 records = records[1:]
         eq_(records, [])

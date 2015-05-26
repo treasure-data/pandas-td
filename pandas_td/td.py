@@ -1,7 +1,7 @@
 import contextlib
 import gzip
+import io
 import os
-import StringIO
 import time
 import uuid
 import zlib
@@ -53,7 +53,7 @@ class Connection(object):
 
     def query(self, query, **kwargs):
         # parameters
-        if not kwargs.has_key('type') and self.type:
+        if 'type' not in kwargs and self.type:
             kwargs['type'] = self.type
 
         # issue query
@@ -110,7 +110,7 @@ class ResultProxy(object):
         # content length
         maxval = None
         if 'Content-length' in r.headers:
-            maxval = long(r.headers['Content-length'])
+            maxval = int(r.headers['Content-length'])
 
         # download
         with contextlib.closing(r) as r:
@@ -122,12 +122,12 @@ class ResultProxy(object):
         if self._iter is None:
             self._iter = self.iter_content(size)
         try:
-            return self._iter.next()
+            return next(self._iter)
         except StopIteration:
             return ''
 
     def __iter__(self):
-        for record in msgpack.Unpacker(self):
+        for record in msgpack.Unpacker(self, encoding='utf-8'):
             yield record
 
     def to_dataframe(self):
@@ -174,7 +174,7 @@ class StreamingUploader(object):
         yield records
 
     def pack_gz(self, records):
-        buff = StringIO.StringIO()
+        buff = io.BytesIO()
         with gzip.GzipFile(fileobj=buff, mode='wb') as f:
             for record in records:
                 f.write(msgpack.packb(record))
