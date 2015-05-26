@@ -1,0 +1,4 @@
+certifi>=2015.4.28
+six>=1.9.0
+pandas>=0.16.0
+td-client>=0.1.11

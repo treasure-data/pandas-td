@@ -1,0 +1,6 @@
+*.pyc
+.coverage
+.envrc
+build
+dist
+pandas_td.egg-info
