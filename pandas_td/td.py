@@ -23,6 +23,8 @@ class Connection(object):
             apikey = os.environ['TD_API_KEY']
         if endpoint is None:
             endpoint = DEFAULT_ENDPOINT
+        if not endpoint.endswith('/'):
+            endpoint = endpoint + '/'
         self.apikey = apikey
         self.endpoint = endpoint
         self.client = tdclient.Client(apikey, endpoint)
