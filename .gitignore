@@ -1,6 +1,7 @@
 *.pyc
 .coverage
 .envrc
+.ipynb_checkpoints
 build
 dist
 pandas_td.egg-info
