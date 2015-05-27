@@ -154,9 +154,10 @@ class StreamingUploader(object):
     def current_time(self):
         return int(time.time())
 
-    def normalize_frame(self, frame, time='now'):
+    def normalize_dataframe(self, frame, time, index):
+        # time column
         if time != 'column' and 'time' in frame.columns:
-            logger.warning('The values of "time" column are overwritten.  Use time="column" to preserve "time" column')
+            logger.warning('"time" column is overwritten.  Use time="column" to preserve "time" column')
         if time == 'column':
             if 'time' not in frame.columns:
                 raise TypeError('"time" column is required when time="column"')
@@ -173,16 +174,29 @@ class StreamingUploader(object):
                 raise TypeError('index type must be datetime64[ns]')
             frame = frame.copy()
             frame['time'] = frame.index.astype(np.int64) // 10 ** 9
+            index = False
         else:
             raise ValueError('invalid value for time', time)
+        # index column
+        if index:
+            if 'id' in frame.columns:
+                logger.warning('"id" column is overwritten. Consider using index=False or rename it')
+            frame['id'] = frame.index
         return frame
 
-    def chunk_frame(self, frame):
+    def chunk_frame(self, frame, chunksize):
         records = []
+        record_count = 0
         for _, row in frame.iterrows():
             record = dict(row)
             records.append(record)
-        yield records
+            record_count += 1
+            if chunksize is not None and record_count >= chunksize:
+                yield records
+                records = []
+                record_count = 0
+        if record_count > 0:
+            yield records
 
     def pack_gz(self, records):
         buff = io.BytesIO()
@@ -211,12 +225,67 @@ def read_td_query(query, engine, **kwargs):
     r = engine.execute(query, **kwargs)
     return r.to_dataframe()
 
-def to_td(frame, name, connection, time='now'):
-    '''
-    time = 'now' | 'column' | 'index'
+def to_td(frame, name, con, if_exists='fail', time='now', index=True, chunksize=10000):
+    '''Write a DataFrame to a Treasure Data table.
+
+    This method converts the dataframe into a series of key-value pairs
+    and send them using the Treasure Data streaming API. The data is divided
+    into chunks of rows (default 10,000) and uploaded separately. If upload
+    failed, the client retries the process for a certain amount of time
+    (max_cumul_retry_delay; default 600 secs). This method may fail and
+    raise an exception when retries did not success, in which case the data
+    may be partially inserted. Use the bulk import utility if you cannot
+    accept partial inserts.
+
+    Parameters
+    ----------
+    frame : DataFrame
+        DataFrame to be written.
+    name : string
+        Name of table to be written, in the form 'database.table'.
+    con : Connection
+        Connection to a Treasure Data account.
+    if_exists: {'fail', 'replace', 'append'}, default 'fail'
+        - fail: If table exists, do nothing.
+        - replace: If table exists, drop it, recreate it, and insert data.
+        - append: If table exists, insert data. Create if does not exist.
+    time : {'now', 'column', 'index'}, default 'now'
+        - now: Insert (or replace) a "time" column as the current time.
+        - column: Use "time" column in the dataframe.
+        - index: Convert DataFrame index into a "time" column. This implys index=False.
+    index : boolean, default True
+        Write DataFrame index as a column.
+    chunksize : int, default 10,000
+        Number of rows to be inserted in each chunk from the dataframe.
     '''
     database, table = name.split('.')
-    uploader = StreamingUploader(connection.client, database, table)
-    frame = uploader.normalize_frame(frame, time=time)
-    for records in uploader.chunk_frame(frame):
+
+    # check existence
+    if if_exists == 'fail':
+        try:
+            con.client.table(database, table)
+        except tdclient.api.NotFoundError:
+            con.client.create_log_table(database, table)
+        else:
+            raise RuntimeError('table "%s" already exists' % name)
+    elif if_exists == 'replace':
+        try:
+            t = con.client.table(database, table)
+        except tdclient.api.NotFoundError:
+            pass
+        else:
+            t.delete()
+        con.client.create_log_table(database, table)
+    elif if_exists == 'append':
+        try:
+            con.client.table(database, table)
+        except tdclient.api.NotFoundError:
+            con.client.create_log_table(database, table)
+    else:
+        raise ValueError('invalid value for if_exists: %s' % if_exists)
+
+    # upload
+    uploader = StreamingUploader(con.client, database, table)
+    frame = uploader.normalize_dataframe(frame, time, index)
+    for records in uploader.chunk_frame(frame, chunksize):
         uploader.upload(uploader.pack_gz(records))
