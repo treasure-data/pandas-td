@@ -22,7 +22,7 @@ import pandas_td
 # Initialize connection
 td = pandas_td.connect(apikey=os.environ['TD_API_KEY'],
                        endpoint='https://api.treasuredata.com',
-                       database='sample_datasets'
+                       database='sample_datasets',
                        type='presto')
 
 # Read query result as DataFrame
