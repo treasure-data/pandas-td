@@ -1,19 +1,17 @@
 language: python
 python:
-  - "2.7"
-  - "3.4"
+- '2.7'
+- '3.4'
 install:
-  - "pip install -r requirements.txt"
-  - "pip install coveralls"
-script:
-  nosetests --with-coverage --cover-package pandas_td
-after_success:
-  coveralls
+- pip install -r requirements.txt
+- pip install coveralls
+script: nosetests --with-coverage --cover-package pandas_td
+after_success: coveralls
 deploy:
   provider: pypi
   user: k24d
   password:
-    secure: jXSK3crANm6ZcuXMSdEBRnm5OqOMmrhyOp1NqiZWW6dubMaP7ohTAtawoq3BODLj4Yu/5hStCufA8BMtFHMBsng7xMc4cCwU41rOAKtn7sJ13LiRV0b8D72wKLD8cbY/tPlEfZTSB5b20/AqJS8ISiMfYp99hVJpBp3Za5iDju4=
+    secure: oTGKSPRYo9wT3neudmHSgRec3GAim1v7JXyhYXUuaj50EBxuKvLuaZq2cRyOuC6e8TXcK7qFJS3PvmPPrdty7vo7fcdV9TKmY70DUgyXnXGMRxu+tKQfeQEriQUBLplMzl2b50C0ukgK9qYvBY6V9kXXNwsDaIXMMKvi5w6Lpt0q17KQJLJcOG2zvcgTtbfVuWViVGh0NGG1sGgwascKYS1++4qVLrnE8DtuboQY0Bo/1zHsMB5mAoI/zU8SNVenq1dqethmbwBsAHYiJKXNYcO31islNwMEc8F7+PHC5+HEtZS5u9x8HEn1jXLlFhMHronpaZAl2y/62D2hhP6gKDjzi3Z426zTSKCPjgvjaofRM7IiwzT6j5JE+Ro6i1Hn4Kxzlsoxj2Z6MtO97r4wg/cDPCZzloT5hCCOImzXtIN6PiX5yJpUjzvpJ9y3JAGNZ4wFqgXuGeJPpPtH5AMqb4cI5EI0GKCUzwZ9LxdrAt6iHkvuq+opEPl2djC+riA6MOUw0Z0ABu9e5PQi/NklIu8thYDuFzTFadazZQu5ixrpDYNTLItKAaaqZE2/PCy1/+pgLdeBQ887qh/DCRN5OV57/4ewVb4RBEY7tI3OFhcUe5zmhB+aFwtD6JkqLwSR5Ct3/iQFifROFHzEbNpDscic7ER3v9l4Ke8clAiG5RU=
   on:
     tags: true
     repo: treasure-data/pandas-td
