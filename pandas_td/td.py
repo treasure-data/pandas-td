@@ -18,7 +18,7 @@ logger = logging.getLogger(__name__)
 DEFAULT_ENDPOINT = 'https://api.treasuredata.com/'
 
 class Connection(object):
-    def __init__(self, apikey=None, endpoint=None, database=None, type='presto'):
+    def __init__(self, apikey=None, endpoint=None, **kwargs):
         if apikey is None:
             apikey = os.environ['TD_API_KEY']
         if endpoint is None:
@@ -27,43 +27,52 @@ class Connection(object):
             endpoint = endpoint + '/'
         self.apikey = apikey
         self.endpoint = endpoint
-        self.client = tdclient.Client(apikey, endpoint)
-        self.database = database
-        self.type = type
+        self._kwargs = kwargs
+
+    @property
+    def client(self):
+        if not hasattr(self, '_client'):
+            self._client = tdclient.Client(self.apikey, self.endpoint, **self._kwargs)
+        return self._client
 
     def databases(self):
         databases = self.client.databases()
         if databases:
             return pd.DataFrame(
                 [[db.name, db.count, db.permission, db.created_at, db.updated_at] for db in databases],
-                columns=['name', 'count', 'permission', 'created_at', 'updated_at'],
-            )
+                columns=['name', 'count', 'permission', 'created_at', 'updated_at'])
         else:
             return pd.DataFrame()
 
-    def tables(self, database=None):
-        if database is None:
-            database = self.database
+    def tables(self, database):
         tables = self.client.tables(database)
         if tables:
             return pd.DataFrame(
                 [[t.name, t.count, t.estimated_storage_size, t.last_log_timestamp, t.created_at] for t in tables],
-                columns=['name', 'count', 'estimated_storage_size', 'last_log_timestamp', 'created_at'],
-            )
+                columns=['name', 'count', 'estimated_storage_size', 'last_log_timestamp', 'created_at'])
         else:
             return pd.DataFrame()
 
-    def query(self, query, **kwargs):
+    def query_engine(self, database, **kwargs):
+        return QueryEngine(self, database, **kwargs)
+
+class QueryEngine(object):
+    def __init__(self, connection, database, **kwargs):
+        self.connection = connection
+        self.database = database
+        self._kwargs = kwargs
+
+    def execute(self, query, **kwargs):
         # parameters
-        if 'type' not in kwargs and self.type:
-            kwargs['type'] = self.type
+        params = self._kwargs.copy()
+        params.update(kwargs)
 
         # issue query
-        job = self.client.query(self.database, query, **kwargs)
+        job = self.connection.client.query(self.database, query, **params)
 
         # wait
         while not job.finished():
-            time.sleep(1)
+            time.sleep(2)
             job._update_status()
 
         # status check
@@ -80,9 +89,9 @@ class Connection(object):
         return ResultProxy(self, job.job_id)
 
 class ResultProxy(object):
-    def __init__(self, connection, job_id):
-        self.connection = connection
-        self.job = connection.client.job(job_id)
+    def __init__(self, engine, job_id):
+        self.engine = engine
+        self.job = engine.connection.client.job(job_id)
         self._iter = None
 
     @property
@@ -100,11 +109,11 @@ class ResultProxy(object):
     def iter_content(self, chunk_size):
         # start downloading
         headers = {
-            'Authorization': 'TD1 {0}'.format(self.connection.apikey),
+            'Authorization': 'TD1 {0}'.format(self.engine.connection.apikey),
             'Accept-Encoding': 'deflate, gzip',
         }
         r = requests.get('{endpoint}v3/job/result/{job_id}?format={format}'.format(
-            endpoint = self.connection.endpoint,
+            endpoint = self.engine.connection.endpoint,
             job_id = self.job.job_id,
             format = 'msgpack.gz',
         ), headers=headers, stream=True)
@@ -192,21 +201,22 @@ class StreamingUploader(object):
 
 # utility functions
 
-def connect(apikey=None, endpoint=None, database=None, **kwargs):
-    return Connection(apikey, endpoint, database, **kwargs)
+def connect(apikey=None, endpoint=None, **kwargs):
+    return Connection(apikey, endpoint, **kwargs)
 
-def read_td(query, connection, **kwargs):
-    return read_td_query(query, connection, **kwargs)
+def read_td(query, engine, **kwargs):
+    return read_td_query(query, engine, **kwargs)
 
-def read_td_query(query, connection, **kwargs):
-    r = connection.query(query, **kwargs)
+def read_td_query(query, engine, **kwargs):
+    r = engine.execute(query, **kwargs)
     return r.to_dataframe()
 
-def to_td(frame, table, connection, time='now'):
+def to_td(frame, name, connection, time='now'):
     '''
     time = 'now' | 'column' | 'index'
     '''
-    uploader = StreamingUploader(connection.client, connection.database, table)
+    database, table = name.split('.')
+    uploader = StreamingUploader(connection.client, database, table)
     frame = uploader.normalize_frame(frame, time=time)
     for records in uploader.chunk_frame(frame):
         uploader.upload(uploader.pack_gz(records))

@@ -17,19 +17,20 @@ $ pip install pandas-td
 
 ```python
 import os
-import pandas_td
+from pandas_td import connect
+from pandas_td import read_td
+from pandas_td import to_td
 
 # Initialize connection
-td = pandas_td.connect(apikey=os.environ['TD_API_KEY'],
-                       endpoint='https://api.treasuredata.com',
-                       database='sample_datasets',
-                       type='presto')
+td = connect(apikey=os.environ['TD_API_KEY'],
+             endpoint='https://api.treasuredata.com')
+presto = td.query_engine(database='sample_datasets', type='presto')
 
 # Read query result as DataFrame
-df = pandas_td.read_td('select * from www_access', td)
+df = read_td('select * from www_access', presto)
 
 # Upload DataFrame to a table
-pandas_td.to_td(df, 'test_table', td)
+to_td(df, 'my_db.test_table', td)
 ```
 
 ## License

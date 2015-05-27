@@ -41,8 +41,8 @@ class TestClient(object):
 
 class ConnectionTestCase(TestCase):
     def setUp(self):
-        self.connection = Connection('test-key', 'test-endpoint', 'test_db')
-        self.connection.client = TestClient()
+        self.connection = Connection('test-key', 'test-endpoint')
+        self.connection._client = TestClient()
 
     def test_databases(self):
         d = self.connection.databases()
@@ -50,11 +50,6 @@ class ConnectionTestCase(TestCase):
         eq_(d.name[0], 'test_db')
 
     def test_tables(self):
-        d = self.connection.tables()
-        eq_(len(d), 1)
-        eq_(d.name[0], 'test_tbl')
-
-    def test_tables_with_database(self):
         d = self.connection.tables('test_db')
         eq_(len(d), 1)
         eq_(d.name[0], 'test_tbl')
