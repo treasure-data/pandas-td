@@ -69,19 +69,17 @@ class QueryEngine(object):
 
         # issue query
         job = self.connection.client.query(self.database, query, **params)
-        while not job.finished():
-            time.sleep(2)
-            job._update_status()
+        job.wait()
 
         # status check
         if not job.success():
-            stderr = job._debug['stderr']
+            stderr = job.debug['stderr']
             if stderr:
                 logger.error(stderr)
             raise RuntimeError("job {0} {1}\n\nOutput:\n{2}".format(
                 job.job_id,
                 job.status(),
-                job._debug['cmdout']))
+                job.debug['cmdout']))
 
         # result
         return ResultProxy(self, job)
@@ -98,11 +96,11 @@ class ResultProxy(object):
 
     @property
     def size(self):
-        return self.job._result_size
+        return self.job.result_size
 
     @property
     def description(self):
-        return self.job._hive_result_schema
+        return self.job.result_schema
 
     def iter_content(self, chunk_size):
         # start downloading
