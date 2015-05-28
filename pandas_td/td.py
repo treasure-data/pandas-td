@@ -69,8 +69,6 @@ class QueryEngine(object):
 
         # issue query
         job = self.connection.client.query(self.database, query, **params)
-
-        # wait
         while not job.finished():
             time.sleep(2)
             job._update_status()
@@ -85,13 +83,13 @@ class QueryEngine(object):
                 job.status(),
                 job._debug['cmdout']))
 
-        # result as DataFrame
-        return ResultProxy(self, job.job_id)
+        # result
+        return ResultProxy(self, job)
 
 class ResultProxy(object):
-    def __init__(self, engine, job_id):
+    def __init__(self, engine, job):
         self.engine = engine
-        self.job = engine.connection.client.job(job_id)
+        self.job = job
         self._iter = None
 
     @property
