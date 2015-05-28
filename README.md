@@ -30,7 +30,7 @@ presto = td.query_engine(database='sample_datasets', type='presto')
 df = read_td('select * from www_access', presto)
 
 # Upload DataFrame to a table
-to_td(df, 'my_db.test_table', td)
+to_td(df, 'my_db.test_table', td, index=False)
 ```
 
 ## License
