@@ -87,15 +87,19 @@ class StreamingUploaderTestCase(TestCase):
         self.uploader.normalize_dataframe(frame, 'invalid')
 
     def test_chunk_frame(self):
-        frame = pd.DataFrame([['a', 1], ['b', 2]], columns=['x', 'y'])
-        for records in self.uploader.chunk_frame(frame, None):
-            eq_(records, [{'x': 'a', 'y': 1}, {'x': 'b', 'y': 2}])
+        frame = pd.DataFrame([[1], [2], [3], [4]])
+        chunks = [chunk for chunk in self.uploader._chunk_frame(frame, 2)]
+        eq_(len(chunks), 2)
 
-    def test_pack_gz(self):
+    def test_pack(self):
         records = [{'x': 'a', 'y': 1}, {'x': 'b', 'y': 2}]
-        data = self.uploader.pack_gz(records)
-        with gzip.GzipFile(fileobj=io.BytesIO(data)) as f:
-            for unpacked in msgpack.Unpacker(f, encoding='utf-8'):
-                eq_(unpacked, records[0])
-                records = records[1:]
+        data = self.uploader._pack(pd.DataFrame(records))
+        for unpacked in msgpack.Unpacker(io.BytesIO(data), encoding='utf-8'):
+            eq_(unpacked, records[0])
+            records = records[1:]
         eq_(records, [])
+
+    def test_gzip(self):
+        data = self.uploader._gzip(b'abc')
+        with gzip.GzipFile(fileobj=io.BytesIO(data)) as f:
+            eq_(f.read(), b'abc')

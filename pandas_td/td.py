@@ -184,38 +184,34 @@ class StreamingUploader(object):
                 frame[index_label] = frame.index.astype('object')
         return frame
 
-    def chunk_frame(self, frame, chunksize):
-        records = []
-        record_count = 0
-        for _, row in frame.iterrows():
-            record = dict(row)
-            records.append(record)
-            record_count += 1
-            if chunksize is not None and record_count >= chunksize:
-                yield records
-                records = []
-                record_count = 0
-        if record_count > 0:
-            yield records
+    def _chunk_frame(self, frame, chunksize):
+        for i in range((len(frame) - 1) // chunksize + 1):
+            yield frame[i * chunksize : i * chunksize + chunksize]
 
-    def pack_gz(self, records):
-        # pack
+    def _pack(self, chunk):
         packer = msgpack.Packer(autoreset=False)
-        for record in records:
+        for _, row in chunk.iterrows():
+            record = dict(row)
             packer.pack(record)
-        # gzip
+        return packer.bytes()
+
+    def _gzip(self, data):
         buff = io.BytesIO()
         with gzip.GzipFile(fileobj=buff, mode='wb') as f:
-            f.write(packer.bytes())
+            f.write(data)
         return buff.getvalue()
 
-    def upload(self, data):
+    def _upload(self, data):
         database = self.database
         table = self.table
         data_size = len(data)
         unique_id = uuid.uuid4()
         elapsed = self.client.import_data(database, table, 'msgpack.gz', data, data_size, unique_id)
         logger.debug('imported %d bytes in %.3f secs', data_size, elapsed)
+
+    def upload_frame(self, frame, chunksize):
+        for chunk in self._chunk_frame(frame, chunksize):
+            self._upload(self._gzip(self._pack(chunk)))
 
 # utility functions
 
@@ -295,5 +291,4 @@ def to_td(frame, name, con, if_exists='fail', time='now', index=True, index_labe
     # upload
     uploader = StreamingUploader(con.client, database, table)
     frame = uploader.normalize_dataframe(frame, time, index, index_label)
-    for records in uploader.chunk_frame(frame, chunksize):
-        uploader.upload(uploader.pack_gz(records))
+    uploader.upload_frame(frame, chunksize)
