@@ -150,7 +150,8 @@ class StreamingUploader(object):
     def current_time(self):
         return int(time.time())
 
-    def normalize_dataframe(self, frame, time, index):
+    def normalize_dataframe(self, frame, time, index=False, index_label=False):
+        frame = frame.copy()
         # time column
         if time != 'column' and 'time' in frame.columns:
             logger.warning('"time" column is overwritten.  Use time="column" to preserve "time" column')
@@ -160,24 +161,27 @@ class StreamingUploader(object):
             if frame.time.dtype not in (np.dtype('int64'), np.dtype('datetime64[ns]')):
                 raise TypeError('time type must be either int64 or datetime64')
             if frame.time.dtype == np.dtype('datetime64[ns]'):
-                frame = frame.copy()
                 frame['time'] = frame.time.astype(np.int64, copy=True) // 10 ** 9
         elif time == 'now':
-            frame = frame.copy()
             frame['time'] = self.current_time()
         elif time == 'index':
             if frame.index.dtype != np.dtype('datetime64[ns]'):
                 raise TypeError('index type must be datetime64[ns]')
-            frame = frame.copy()
             frame['time'] = frame.index.astype(np.int64) // 10 ** 9
             index = False
         else:
             raise ValueError('invalid value for time', time)
         # index column
         if index:
-            if 'id' in frame.columns:
-                logger.warning('"id" column is overwritten. Consider using index=False or rename it')
-            frame['id'] = frame.index
+            if isinstance(frame.index, pd.MultiIndex):
+                if index_label is None:
+                    index_label = [v if v else "level_%d" % i for i, v in enumerate(frame.index.names)]
+                for i, name in zip(frame.index.levels, index_label):
+                    frame[name] = i.astype('object')
+            else:
+                if index_label is None:
+                    index_label = frame.index.name if frame.index.name else 'index'
+                frame[index_label] = frame.index.astype('object')
         return frame
 
     def chunk_frame(self, frame, chunksize):
@@ -195,10 +199,14 @@ class StreamingUploader(object):
             yield records
 
     def pack_gz(self, records):
+        # pack
+        packer = msgpack.Packer(autoreset=False)
+        for record in records:
+            packer.pack(record)
+        # gzip
         buff = io.BytesIO()
         with gzip.GzipFile(fileobj=buff, mode='wb') as f:
-            for record in records:
-                f.write(msgpack.packb(record))
+            f.write(packer.bytes())
         return buff.getvalue()
 
     def upload(self, data):
@@ -221,7 +229,7 @@ def read_td_query(query, engine, **kwargs):
     r = engine.execute(query, **kwargs)
     return r.to_dataframe()
 
-def to_td(frame, name, con, if_exists='fail', time='now', index=True, chunksize=10000):
+def to_td(frame, name, con, if_exists='fail', time='now', index=True, index_label=None, chunksize=10000):
     '''Write a DataFrame to a Treasure Data table.
 
     This method converts the dataframe into a series of key-value pairs
@@ -248,9 +256,13 @@ def to_td(frame, name, con, if_exists='fail', time='now', index=True, chunksize=
     time : {'now', 'column', 'index'}, default 'now'
         - now: Insert (or replace) a "time" column as the current time.
         - column: Use "time" column in the dataframe.
-        - index: Convert DataFrame index into a "time" column. This implys index=False.
+        - index: Convert DataFrame index into a "time" column. This implies index=False.
     index : boolean, default True
         Write DataFrame index as a column.
+    index_label : string or sequence, default None
+        Column label for index column(s). If None is given (default) and index is True,
+        then the index names are used. A sequence should be given if the DataFrame uses
+        MultiIndex.
     chunksize : int, default 10,000
         Number of rows to be inserted in each chunk from the dataframe.
     '''
@@ -282,6 +294,6 @@ def to_td(frame, name, con, if_exists='fail', time='now', index=True, chunksize=
 
     # upload
     uploader = StreamingUploader(con.client, database, table)
-    frame = uploader.normalize_dataframe(frame, time, index)
+    frame = uploader.normalize_dataframe(frame, time, index, index_label)
     for records in uploader.chunk_frame(frame, chunksize):
         uploader.upload(uploader.pack_gz(records))
