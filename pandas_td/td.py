@@ -234,7 +234,7 @@ class StreamingUploader(object):
         for chunk in self._chunk_frame(frame, chunksize):
             self._upload(self._gzip(self._pack(chunk)))
 
-# utility functions
+# public methods
 
 def connect(apikey=None, endpoint=None, **kwargs):
     return Connection(apikey, endpoint, **kwargs)
@@ -251,12 +251,12 @@ def read_td_query(query, engine, index_col=None, params=None, parse_dates=None):
     query : string
         Query string to be executed.
     engine : QueryEngine
-        A handler returned by Connection.query_engine.
+        Handler returned by Connection.query_engine.
     index_col : string, optional
         Column name to use as index for the returned DataFrame object.
     params : dict, optional
         Parameters to pass to execute method.
-    parse_dates : list or dict
+    parse_dates : list or dict, optional
         - List of column names to parse as dates
         - Dict of {column_name: format string} where format string is strftime
           compatible in case of parsing string times or is one of (D, s, ns, ms, us)
@@ -269,6 +269,55 @@ def read_td_query(query, engine, index_col=None, params=None, parse_dates=None):
     if params is None:
         params = {}
     r = engine.execute(query, **params)
+    return r.to_dataframe(index_col=index_col, parse_dates=parse_dates)
+
+def read_td_table(table_name, engine, index_col=None, parse_dates=None, columns=None, sample=None, limit=10000):
+    '''Read Treasure Data table into a DataFrame.
+
+    The number of returned rows is limited by "limit" (default 10,000).
+    Setting limit=None means all rows. Be careful when you set limit=None
+    because your table might be very large and the result does not fit
+    into memory.
+
+    Parameters
+    ----------
+    table_name : string
+        Name of Treasure Data table in database.
+    engine : QueryEngine
+        Handler returned by Connection.query_engine.
+    index_col : string, optional
+        Column name to use as index for the returned DataFrame object.
+    parse_dates : list or dict, optional
+        - List of column names to parse as dates
+        - Dict of {column_name: format string} where format string is strftime
+          compatible in case of parsing string times or is one of (D, s, ns, ms, us)
+          in case of parsing integer timestamps
+    columns : list, optional
+        List of column names to select from table.
+    sample : double, optional
+        Enable sampling data (Presto only). 1.0 means all data (100 percent).
+        See TABLESAMPLE BERNOULLI at https://prestodb.io/docs/current/sql/select.html
+    limit : int, default 10,000
+        Maximum number of rows to select.
+
+    Returns
+    -------
+    DataFrame
+    '''
+    if sample is not None:
+        if sample < 0 or sample > 1:
+            raise ValueError('sample must be between 0 and 1.0')
+    # build query
+    query = """-- read_td_table('{table_name}')
+SELECT {columns}
+FROM {table_name}{sample}{limit}
+""".format(
+    columns = '*' if columns is None else ','.join(columns),
+    table_name = table_name,
+    sample = "" if sample is None else "\nTABLESAMPLE BERNOULLI ({0})".format(sample * 100),
+    limit = "" if limit is None else "\nLIMIT {0}".format(limit))
+    # query
+    r = engine.execute(query)
     return r.to_dataframe(index_col=index_col, parse_dates=parse_dates)
 
 # alias
