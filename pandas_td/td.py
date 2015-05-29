@@ -54,17 +54,17 @@ class Connection(object):
             return pd.DataFrame()
 
     def query_engine(self, database, **kwargs):
-        return QueryEngine(self, database, **kwargs)
+        return QueryEngine(self, database, kwargs)
 
 class QueryEngine(object):
-    def __init__(self, connection, database, **kwargs):
+    def __init__(self, connection, database, params):
         self.connection = connection
         self.database = database
-        self._kwargs = kwargs
+        self._params = params
 
     def execute(self, query, **kwargs):
         # parameters
-        params = self._kwargs.copy()
+        params = self._params.copy()
         params.update(kwargs)
 
         # issue query
@@ -137,9 +137,30 @@ class ResultProxy(object):
         for record in msgpack.Unpacker(self, encoding='utf-8'):
             yield record
 
-    def to_dataframe(self):
+    def _parse_dates(self, frame, parse_dates):
+        for name in parse_dates:
+            if type(parse_dates) is list:
+                frame[name] = pd.to_datetime(frame[name])
+            else:
+                if frame[name].dtype.kind == 'O':
+                    frame[name] = pd.to_datetime(frame[name], format=parse_dates[name])
+                else:
+                    frame[name] = pd.to_datetime(frame[name], unit=parse_dates[name])
+        return frame
+
+    def _index_col(self, frame, index_col):
+        frame.index = frame[index_col]
+        frame.drop(index_col, axis=1, inplace=True)
+        return frame
+
+    def to_dataframe(self, index_col=None, parse_dates=None):
         columns = [c[0] for c in self.description]
-        return pd.DataFrame(iter(self), columns=columns)
+        frame = pd.DataFrame(iter(self), columns=columns)
+        if parse_dates is not None:
+            frame = self._parse_dates(frame, parse_dates)
+        if index_col is not None:
+            frame = self._index_col(frame, index_col)
+        return frame
 
 class StreamingUploader(object):
     def __init__(self, client, database, table):
@@ -218,12 +239,40 @@ class StreamingUploader(object):
 def connect(apikey=None, endpoint=None, **kwargs):
     return Connection(apikey, endpoint, **kwargs)
 
-def read_td(query, engine, **kwargs):
-    return read_td_query(query, engine, **kwargs)
+def read_td_query(query, engine, index_col=None, params=None, parse_dates=None):
+    '''Read Treasure Data query into a DataFrame.
 
-def read_td_query(query, engine, **kwargs):
-    r = engine.execute(query, **kwargs)
-    return r.to_dataframe()
+    Returns a DataFrame corresponding to the result set of the query string.
+    Optionally provide an index_col parameter to use one of the columns as
+    the index, otherwise default integer index will be used.
+
+    Parameters
+    ----------
+    query : string
+        Query string to be executed.
+    engine : QueryEngine
+        A handler returned by Connection.query_engine.
+    index_col : string, optional
+        Column name to use as index for the returned DataFrame object.
+    params : dict, optional
+        Parameters to pass to execute method.
+    parse_dates : list or dict
+        - List of column names to parse as dates
+        - Dict of {column_name: format string} where format string is strftime
+          compatible in case of parsing string times or is one of (D, s, ns, ms, us)
+          in case of parsing integer timestamps
+
+    Returns
+    -------
+    DataFrame
+    '''
+    if params is None:
+        params = {}
+    r = engine.execute(query, **params)
+    return r.to_dataframe(index_col=index_col, parse_dates=parse_dates)
+
+# alias
+read_td = read_td_query
 
 def to_td(frame, name, con, if_exists='fail', time='now', index=True, index_label=None, chunksize=10000):
     '''Write a DataFrame to a Treasure Data table.
@@ -251,8 +300,8 @@ def to_td(frame, name, con, if_exists='fail', time='now', index=True, index_labe
         - append: If table exists, insert data. Create if does not exist.
     time : {'now', 'column', 'index'}, default 'now'
         - now: Insert (or replace) a "time" column as the current time.
-        - column: Use "time" column in the dataframe.
-        - index: Convert DataFrame index into a "time" column. This implies index=False.
+        - column: Use "time" column, must be an integer (unixtime) or datetime.
+        - index: Convert DataFrame index into a "time" column, implies index=False.
     index : boolean, default True
         Write DataFrame index as a column.
     index_label : string or sequence, default None
