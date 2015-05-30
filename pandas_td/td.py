@@ -57,10 +57,10 @@ class Connection(object):
         return QueryEngine(self, database, kwargs)
 
 class QueryEngine(object):
-    def __init__(self, connection, database, params):
+    def __init__(self, connection, database, params=None):
         self.connection = connection
         self.database = database
-        self._params = params
+        self._params = {} if params is None else params
 
     def execute(self, query, **kwargs):
         # parameters
@@ -84,6 +84,22 @@ class QueryEngine(object):
         # result
         return ResultProxy(self, job)
 
+    def _http_get(self, uri, **kwargs):
+        return requests.get(uri, **kwargs)
+
+    def download(self, job):
+        # start downloading
+        headers = {
+            'Authorization': 'TD1 {0}'.format(self.connection.apikey),
+            'Accept-Encoding': 'deflate, gzip',
+        }
+        r = self._http_get('{endpoint}v3/job/result/{job_id}?format={format}'.format(
+            endpoint = self.connection.endpoint,
+            job_id = job.job_id,
+            format = 'msgpack.gz',
+        ), headers=headers, stream=True)
+        return r
+
 class ResultProxy(object):
     def __init__(self, engine, job):
         self.engine = engine
@@ -103,16 +119,7 @@ class ResultProxy(object):
         return self.job.result_schema
 
     def iter_content(self, chunk_size):
-        # start downloading
-        headers = {
-            'Authorization': 'TD1 {0}'.format(self.engine.connection.apikey),
-            'Accept-Encoding': 'deflate, gzip',
-        }
-        r = requests.get('{endpoint}v3/job/result/{job_id}?format={format}'.format(
-            endpoint = self.engine.connection.endpoint,
-            job_id = self.job.job_id,
-            format = 'msgpack.gz',
-        ), headers=headers, stream=True)
+        r = self.engine.download(self.job)
 
         # content length
         maxval = None
@@ -120,8 +127,8 @@ class ResultProxy(object):
             maxval = int(r.headers['Content-length'])
 
         # download
-        with contextlib.closing(r) as r:
-            d = zlib.decompressobj(16+zlib.MAX_WBITS)
+        d = zlib.decompressobj(16+zlib.MAX_WBITS)
+        with contextlib.closing(r):
             for chunk in r.iter_content(chunk_size):
                 yield d.decompress(chunk)
 
@@ -223,11 +230,9 @@ class StreamingUploader(object):
         return buff.getvalue()
 
     def _upload(self, data):
-        database = self.database
-        table = self.table
         data_size = len(data)
         unique_id = uuid.uuid4()
-        elapsed = self.client.import_data(database, table, 'msgpack.gz', data, data_size, unique_id)
+        elapsed = self.client.import_data(self.database, self.table, 'msgpack.gz', data, data_size, unique_id)
         logger.debug('imported %d bytes in %.3f secs', data_size, elapsed)
 
     def upload_frame(self, frame, chunksize):
@@ -312,7 +317,7 @@ def read_td_table(table_name, engine, index_col=None, parse_dates=None, columns=
 SELECT {columns}
 FROM {table_name}{sample}{limit}
 """.format(
-    columns = '*' if columns is None else ','.join(columns),
+    columns = '*' if columns is None else ', '.join(columns),
     table_name = table_name,
     sample = "" if sample is None else "\nTABLESAMPLE BERNOULLI ({0})".format(sample * 100),
     limit = "" if limit is None else "\nLIMIT {0}".format(limit))
@@ -376,7 +381,7 @@ def to_td(frame, name, con, if_exists='fail', time='now', index=True, index_labe
         except tdclient.api.NotFoundError:
             pass
         else:
-            t.delete()
+            con.client.delete_table(database, table)
         con.client.create_log_table(database, table)
     elif if_exists == 'append':
         try:
