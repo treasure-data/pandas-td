@@ -17,20 +17,20 @@ $ pip install pandas-td
 
 ```python
 import os
-from pandas_td import connect
-from pandas_td import read_td
-from pandas_td import to_td
+import pandas_td as td
 
 # Initialize connection
-td = connect(apikey=os.environ['TD_API_KEY'],
-             endpoint='https://api.treasuredata.com/')
-presto = td.query_engine(database='sample_datasets', type='presto')
+td_conn = td.connect(apikey=os.environ['TD_API_KEY'], endpoint='https://api.treasuredata.com/')
+presto = td_conn.query_engine(database='sample_datasets', type='presto')
 
-# Read query result as DataFrame
-df = read_td('select * from www_access', presto)
+# Read Treasure Data query into a DataFrame.
+df = td.read_td('select * from www_access', presto)
 
-# Upload DataFrame to a table
-to_td(df, 'my_db.test_table', td, index=False)
+# Read Treasure Data table, sampling 5 percent of data, into a DataFrame.
+df = td.read_td_table('nasdaq', presto, sample=0.05, limit=10000)
+
+# Write a DataFrame to a Treasure Data table.
+td.to_td(df, 'my_db.test_table', td_conn, if_exists='replace', index=False)
 ```
 
 ## License
