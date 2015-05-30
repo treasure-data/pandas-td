@@ -33,6 +33,10 @@ df = td.read_td_table('nasdaq', presto, sample=0.05, limit=10000)
 td.to_td(df, 'my_db.test_table', td_conn, if_exists='replace', index=False)
 ```
 
+## Documentation
+
+- Tutorial (https://github.com/treasure-data/pandas-td/blob/master/doc/tutorial.ipynb)
+
 ## License
 
 Apache Software License, Version 2.0
