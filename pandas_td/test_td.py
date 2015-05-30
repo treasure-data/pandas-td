@@ -3,10 +3,12 @@ from .td import Connection
 from .td import QueryEngine
 from .td import ResultProxy
 from .td import StreamingUploader
-from .td import connect
-from .td import read_td_query
-from .td import read_td_table
-from .td import to_td
+
+from pandas_td import connect
+from pandas_td import read_td
+from pandas_td import read_td_query
+from pandas_td import read_td_table
+from pandas_td import to_td
 
 import collections
 import datetime
@@ -286,6 +288,10 @@ class ReadTdTableTestCase(TestCase):
         self.connection.client.query.assert_called_with('test_db', "-- read_td_table('test_table')" + query, type='presto')
 
     @raises(ValueError)
+    def test_invalid_time_range(self):
+        read_td_table('test_table', self.engine, time_range=(1.0, 2.0))
+
+    @raises(ValueError)
     def test_invalid_sample_small(self):
         read_td_table('test_table', self.engine, sample=-1)
 
@@ -300,6 +306,23 @@ SELECT *
 FROM test_table
 LIMIT 10000
 ''')
+
+    def test_time_range(self):
+        time_range_tests = [
+            [(None, None), "NULL", "NULL"],
+            [(0, 1000000000), "'1970-01-01 00:00:00'", "'2001-09-09 01:46:40'"],
+            [('2000-01-01', '2010-01-01'), "'2000-01-01 00:00:00'", "'2010-01-01 00:00:00'"],
+            [(datetime.date(2000, 1, 1), datetime.datetime(2010, 1, 1, 0, 0, 0)),
+             "'2000-01-01 00:00:00'", "'2010-01-01 00:00:00'"],
+        ]
+        for time_range, start, end in time_range_tests:
+            read_td_table('test_table', self.engine, time_range=time_range)
+        self.assert_query('''
+SELECT *
+FROM test_table
+WHERE td_time_range(time, {0}, {1})
+LIMIT 10000
+'''.format(start, end))
 
     def test_with_columns(self):
         read_td_table('test_table', self.engine, columns=['c1', 'c2'])

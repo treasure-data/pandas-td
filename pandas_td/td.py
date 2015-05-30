@@ -1,4 +1,5 @@
 import contextlib
+import datetime
 import gzip
 import io
 import os
@@ -10,6 +11,7 @@ import msgpack
 import numpy as np
 import pandas as pd
 import requests
+import six
 import tdclient
 
 import logging
@@ -276,13 +278,12 @@ def read_td_query(query, engine, index_col=None, params=None, parse_dates=None):
     r = engine.execute(query, **params)
     return r.to_dataframe(index_col=index_col, parse_dates=parse_dates)
 
-def read_td_table(table_name, engine, index_col=None, parse_dates=None, columns=None, sample=None, limit=10000):
+def read_td_table(table_name, engine, index_col=None, parse_dates=None, columns=None, time_range=None, sample=None, limit=10000):
     '''Read Treasure Data table into a DataFrame.
 
     The number of returned rows is limited by "limit" (default 10,000).
     Setting limit=None means all rows. Be careful when you set limit=None
-    because your table might be very large and the result does not fit
-    into memory.
+    because your table might be very large and the result does not fit into memory.
 
     Parameters
     ----------
@@ -299,6 +300,9 @@ def read_td_table(table_name, engine, index_col=None, parse_dates=None, columns=
           in case of parsing integer timestamps
     columns : list, optional
         List of column names to select from table.
+    time_range : tuple (start, end), optional
+        Limit time range to select. "start" and "end" are one of None, integers,
+        strings or datetime objects. "end" is exclusive, not included in the result.
     sample : double, optional
         Enable sampling data (Presto only). 1.0 means all data (100 percent).
         See TABLESAMPLE BERNOULLI at https://prestodb.io/docs/current/sql/select.html
@@ -309,21 +313,36 @@ def read_td_table(table_name, engine, index_col=None, parse_dates=None, columns=
     -------
     DataFrame
     '''
-    if sample is not None:
-        if sample < 0 or sample > 1:
-            raise ValueError('sample must be between 0 and 1.0')
-    # build query
     query = """-- read_td_table('{table_name}')
 SELECT {columns}
-FROM {table_name}{sample}{limit}
-""".format(
-    columns = '*' if columns is None else ', '.join(columns),
-    table_name = table_name,
-    sample = "" if sample is None else "\nTABLESAMPLE BERNOULLI ({0})".format(sample * 100),
-    limit = "" if limit is None else "\nLIMIT {0}".format(limit))
-    # query
+FROM {table_name}
+""".format(columns = '*' if columns is None else ', '.join(columns),
+           table_name = table_name)
+    if sample:
+        if sample < 0 or sample > 1:
+            raise ValueError('sample must be between 0.0 and 1.0')
+        query += "TABLESAMPLE BERNOULLI ({0})\n".format(sample * 100)
+    if time_range:
+        start, end = time_range
+        query += "WHERE td_time_range(time, {0}, {1})\n".format(_convert_time(start), _convert_time(end))
+    if limit:
+        query += "LIMIT {0}\n".format(limit)
+    # execute
     r = engine.execute(query)
     return r.to_dataframe(index_col=index_col, parse_dates=parse_dates)
+
+def _convert_time(time):
+    if time is None:
+        return "NULL"
+    elif isinstance(time, six.integer_types):
+        t = pd.to_datetime(time, unit='s')
+    elif isinstance(time, six.string_types):
+        t = pd.to_datetime(time)
+    elif isinstance(time, (datetime.date, datetime.datetime)):
+        t = pd.to_datetime(time)
+    else:
+        raise ValueError('invalid time value: {0}'.format(time))
+    return "'{0}'".format(t.replace(microsecond=0))
 
 # alias
 read_td = read_td_query
