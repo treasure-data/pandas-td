@@ -19,7 +19,10 @@ import numpy as np
 import pandas as pd
 
 from unittest import TestCase
-from unittest.mock import MagicMock
+try:
+    from unittest.mock import MagicMock
+except ImportError:
+    from mock import MagicMock
 from nose.tools import ok_, eq_, raises
 
 # mocks

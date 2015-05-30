@@ -4,6 +4,7 @@ python:
 - '3.4'
 install:
 - pip install -r requirements.txt
+- pip install mock
 - pip install coveralls
 script: nosetests --with-coverage --cover-package pandas_td
 after_success: coveralls
