@@ -177,43 +177,6 @@ class StreamingUploader(object):
         self.database = database
         self.table = table
 
-    def current_time(self):
-        return int(time.time())
-
-    def normalize_dataframe(self, frame, time, index=False, index_label=False):
-        frame = frame.copy()
-        # time column
-        if time != 'column' and 'time' in frame.columns:
-            logger.warning('"time" column is overwritten.  Use time="column" to preserve "time" column')
-        if time == 'column':
-            if 'time' not in frame.columns:
-                raise TypeError('"time" column is required when time="column"')
-            if frame.time.dtype not in (np.dtype('int64'), np.dtype('datetime64[ns]')):
-                raise TypeError('time type must be either int64 or datetime64')
-            if frame.time.dtype == np.dtype('datetime64[ns]'):
-                frame['time'] = frame.time.astype(np.int64, copy=True) // 10 ** 9
-        elif time == 'now':
-            frame['time'] = self.current_time()
-        elif time == 'index':
-            if frame.index.dtype != np.dtype('datetime64[ns]'):
-                raise TypeError('index type must be datetime64[ns]')
-            frame['time'] = frame.index.astype(np.int64) // 10 ** 9
-            index = False
-        else:
-            raise ValueError('invalid value for time', time)
-        # index column
-        if index:
-            if isinstance(frame.index, pd.MultiIndex):
-                if index_label is None:
-                    index_label = [v if v else "level_%d" % i for i, v in enumerate(frame.index.names)]
-                for i, name in zip(frame.index.levels, index_label):
-                    frame[name] = i.astype('object')
-            else:
-                if index_label is None:
-                    index_label = frame.index.name if frame.index.name else 'index'
-                frame[index_label] = frame.index.astype('object')
-        return frame
-
     def _chunk_frame(self, frame, chunksize):
         for i in range((len(frame) - 1) // chunksize + 1):
             yield frame[i * chunksize : i * chunksize + chunksize]
@@ -347,7 +310,7 @@ def _convert_time(time):
 # alias
 read_td = read_td_query
 
-def to_td(frame, name, con, if_exists='fail', time='now', index=True, index_label=None, chunksize=10000):
+def to_td(frame, name, con, if_exists='fail', time_col=None, time_index=None, index=True, index_label=None, chunksize=10000):
     '''Write a DataFrame to a Treasure Data table.
 
     This method converts the dataframe into a series of key-value pairs
@@ -371,10 +334,13 @@ def to_td(frame, name, con, if_exists='fail', time='now', index=True, index_labe
         - fail: If table exists, do nothing.
         - replace: If table exists, drop it, recreate it, and insert data.
         - append: If table exists, insert data. Create if does not exist.
-    time : {'now', 'column', 'index'}, default 'now'
-        - now: Insert (or replace) a "time" column as the current time.
-        - column: Use "time" column, must be an integer (unixtime) or datetime.
-        - index: Convert DataFrame index into a "time" column, implies index=False.
+    time_col : string, optional
+        Column name to use as "time" column for the table. Column type must be
+        integer (unixtime) or datetime. If None is given (default), then the current
+        time is used as time values.
+    time_index : int, optional
+        Level of index to use as "time" column for the table. Set 0 for a single index.
+        This parameter implies index=False.
     index : boolean, default True
         Write DataFrame index as a column.
     index_label : string or sequence, default None
@@ -410,7 +376,58 @@ def to_td(frame, name, con, if_exists='fail', time='now', index=True, index_labe
     else:
         raise ValueError('invalid value for if_exists: %s' % if_exists)
 
+    # convert
+    frame = _to_td_convert_dataframe(frame, time_col, time_index, index, index_label)
+
     # upload
     uploader = StreamingUploader(con.client, database, table)
-    frame = uploader.normalize_dataframe(frame, time, index, index_label)
     uploader.upload_frame(frame, chunksize)
+
+def _to_td_convert_dataframe(frame, time_col=None, time_index=None, index=None, index_label=None):
+    frame = frame.copy()
+
+    # time column
+    if time_col is not None and time_index is not None:
+        raise ValueError('time_col and time_index cannot be used at the same time')
+    if 'time' in frame.columns and time_col != 'time':
+        raise ValueError('"time" column already exists')
+    if time_col is not None:
+        col = frame[time_col]
+        if col.dtype not in (np.dtype('int64'), np.dtype('datetime64[ns]')):
+            raise TypeError('time type must be either int64 or datetime64')
+        if col.dtype != np.dtype('int64'):
+            frame['time'] = col.astype(np.int64, copy=True) // (10 ** 9)
+            if time_col != 'time':
+                frame.drop(time_col, axis=1, inplace=True)
+        elif time_col != 'time':
+            frame.rename(columns={time_col: 'time'}, inplace=True)
+    elif time_index is not None:
+        if type(time_index) is bool or not isinstance(time_index, six.integer_types):
+            raise TypeError('invalid type for time_index')
+        if isinstance(frame.index, pd.MultiIndex):
+            idx = frame.index.levels[time_index]
+        else:
+            if time_index == 0:
+                idx = frame.index
+            else:
+                raise IndexError('list index out of range')
+        if idx.dtype != np.dtype('datetime64[ns]'):
+            raise TypeError('index type must be datetime64[ns]')
+        frame['time'] = idx.astype(np.int64) // (10 ** 9)
+        index = None
+    else:
+        frame['time'] = int(time.time())
+
+    # index column
+    if index is not None:
+        if isinstance(frame.index, pd.MultiIndex):
+            if index_label is None:
+                index_label = [v if v else "level_%d" % i for i, v in enumerate(frame.index.names)]
+            for i, name in zip(frame.index.levels, index_label):
+                frame[name] = i.astype('object')
+        else:
+            if index_label is None:
+                index_label = frame.index.name if frame.index.name else 'index'
+            frame[index_label] = frame.index.astype('object')
+
+    return frame

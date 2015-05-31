@@ -3,6 +3,7 @@ from .td import Connection
 from .td import QueryEngine
 from .td import ResultProxy
 from .td import StreamingUploader
+from .td import _to_td_convert_dataframe
 
 from pandas_td import connect
 from pandas_td import read_td
@@ -222,30 +223,6 @@ class StreamingUploaderTestCase(TestCase):
     def setUp(self):
         self.uploader = StreamingUploader(None, 'test_db', 'test_tbl')
 
-    def test_normalize_time_now(self):
-        frame = pd.DataFrame([['a', 1], ['b', 2]], columns=['x', 'y'])
-        # time='now'
-        f2 = self.uploader.normalize_dataframe(frame, 'now')
-        eq_(list(f2.columns), ['x', 'y', 'time'])
-
-    def test_normalize_time_column(self):
-        frame = pd.DataFrame([[0, 'a', 1], [0, 'b', 2]], columns=['time', 'x', 'y'])
-        # time='column'
-        f1 = self.uploader.normalize_dataframe(frame, 'column')
-        eq_(list(f1.columns), ['time', 'x', 'y'])
-
-    def test_normalize_time_index(self):
-        date_range = pd.date_range('2015-01-01', periods=2, freq='d')
-        frame = pd.DataFrame([['a', 1], ['b', 2]], columns=['x', 'y'], index=date_range)
-        # time='index'
-        f1 = self.uploader.normalize_dataframe(frame, 'index')
-        eq_(list(f1.columns), ['x', 'y', 'time'])
-
-    @raises(ValueError)
-    def test_raise_invalid_time(self):
-        frame = pd.DataFrame([['a', 1], ['b', 2]], columns=['x', 'y'])
-        self.uploader.normalize_dataframe(frame, 'invalid')
-
     def test_chunk_frame(self):
         frame = pd.DataFrame([[1], [2], [3], [4]])
         chunks = [chunk for chunk in self.uploader._chunk_frame(frame, 2)]
@@ -362,12 +339,12 @@ class ToTdTestCase(TestCase):
         to_td(self.frame, 'test_db.test_table', self.connection, if_exists='invalid')
 
     @raises(RuntimeError)
-    def test_table_already_exists(self):
+    def test_fail_if_exists(self):
         client = self.connection.client
         client.table = MagicMock()
         to_td(self.frame, 'test_db.test_table', self.connection)
 
-    def test_ok(self):
+    def test_ok_if_not_exists(self):
         # mock
         client = self.connection.client
         client.table = MagicMock(side_effect=tdclient.api.NotFoundError('test_table'))
@@ -378,7 +355,7 @@ class ToTdTestCase(TestCase):
         client.table.assert_called_with('test_db', 'test_table')
         client.create_log_table.assert_called_with('test_db', 'test_table')
 
-    def test_replace(self):
+    def test_replace_if_exists(self):
         # mock
         client = self.connection.client
         client.table = MagicMock(side_effect=tdclient.api.NotFoundError('test_table'))
@@ -395,7 +372,7 @@ class ToTdTestCase(TestCase):
         client.delete_table.assert_called_with('test_db', 'test_table')
         client.create_log_table.assert_called_with('test_db', 'test_table')
 
-    def test_append(self):
+    def test_append_if_exists(self):
         # mock
         client = self.connection.client
         client.table = MagicMock(side_effect=tdclient.api.NotFoundError('test_table'))
@@ -407,3 +384,112 @@ class ToTdTestCase(TestCase):
         client.table = MagicMock()
         to_td(self.frame, 'test_db.test_table', self.connection, if_exists='append')
         client.create_log_table.assert_called_once_with('test_db', 'test_table')
+
+    @raises(ValueError)
+    def test_error_time_col_and_time_index(self):
+        _to_td_convert_dataframe(self.frame, time_col='x', time_index=0)
+
+    @raises(ValueError)
+    def test_error_time_column_already_exists(self):
+        f1 = pd.DataFrame([[0, 'a', 1], [0, 'b', 2]], columns=['time', 'x', 'y'])
+        f2 = _to_td_convert_dataframe(f1)
+
+    def test_time_now(self):
+        f1 = pd.DataFrame([['a', 1], ['b', 2]], columns=['x', 'y'])
+        f2 = _to_td_convert_dataframe(f1)
+        eq_(list(f2.columns), ['x', 'y', 'time'])
+
+    def test_time_col_by_unixtime(self):
+        f1 = pd.DataFrame([[0, 'a', 1], [0, 'b', 2]], columns=['time', 'x', 'y'])
+        f2 = _to_td_convert_dataframe(f1, time_col='time')
+        eq_(list(f2.columns), ['time', 'x', 'y'])
+
+    def test_time_col_by_unixtime_rename(self):
+        f1 = pd.DataFrame([[0, 'a', 1], [0, 'b', 2]], columns=['unixtime', 'x', 'y'])
+        f2 = _to_td_convert_dataframe(f1, time_col='unixtime')
+        eq_(list(f2.columns), ['time', 'x', 'y'])
+
+    def test_time_col_by_datetime(self):
+        f1 = pd.DataFrame([['a', 1], ['b', 2]], columns=['x', 'y'])
+        f1['time'] = pd.to_datetime('2001-01-01')
+        f2 = _to_td_convert_dataframe(f1, time_col='time')
+        eq_(list(f2.columns), ['x', 'y', 'time'])
+
+    def test_time_col_by_datetime_rename(self):
+        f1 = pd.DataFrame([['a', 1], ['b', 2]], columns=['x', 'y'])
+        f1['date'] = pd.to_datetime('2001-01-01')
+        f2 = _to_td_convert_dataframe(f1, time_col='date')
+        eq_(list(f2.columns), ['x', 'y', 'time'])
+
+    @raises(TypeError)
+    def test_invalid_arg_time_index(self):
+        date_range = pd.date_range('2015-01-01', periods=2, freq='d')
+        f1 = pd.DataFrame([['a', 1], ['b', 2]], columns=['x', 'y'], index=date_range)
+        f2 = _to_td_convert_dataframe(f1, time_index=True)
+
+    @raises(IndexError)
+    def test_invalid_level_time_index(self):
+        date_range = pd.date_range('2015-01-01', periods=2, freq='d')
+        f1 = pd.DataFrame([['a', 1], ['b', 2]], columns=['x', 'y'], index=date_range)
+        f2 = _to_td_convert_dataframe(f1, time_index=1)
+
+    @raises(TypeError)
+    def test_invalid_value_time_index(self):
+        f1 = pd.DataFrame([['a', 1], ['b', 2]], columns=['x', 'y'])
+        f2 = _to_td_convert_dataframe(f1, time_index=0)
+
+    def test_time_index(self):
+        date_range = pd.date_range('2015-01-01', periods=2, freq='d')
+        f1 = pd.DataFrame([['a', 1], ['b', 2]], columns=['x', 'y'], index=date_range)
+        f2 = _to_td_convert_dataframe(f1, time_index=0)
+        eq_(list(f2.columns), ['x', 'y', 'time'])
+
+    @raises(IndexError)
+    def test_invalid_level_time_index_multi(self):
+        date_range = pd.date_range('2015-01-01', periods=2, freq='d')
+        f1 = pd.DataFrame([['a', 1], ['b', 2]], columns=['x', 'y'], index=[[0, 1], date_range])
+        f2 = _to_td_convert_dataframe(f1, time_index=2)
+
+    @raises(TypeError)
+    def test_invalid_value_time_index_multi(self):
+        date_range = pd.date_range('2015-01-01', periods=2, freq='d')
+        f1 = pd.DataFrame([['a', 1], ['b', 2]], columns=['x', 'y'], index=[[0, 1], date_range])
+        f2 = _to_td_convert_dataframe(f1, time_index=0)
+
+    def test_time_index_multi(self):
+        date_range = pd.date_range('2015-01-01', periods=2, freq='d')
+        f1 = pd.DataFrame([['a', 1], ['b', 2]], columns=['x', 'y'], index=[[0, 1], date_range])
+        f2 = _to_td_convert_dataframe(f1, time_index=1)
+        eq_(list(f2.columns), ['x', 'y', 'time'])
+
+    def test_index(self):
+        f1 = pd.DataFrame([['a', 1], ['b', 2]], columns=['x', 'y'])
+        f2 = _to_td_convert_dataframe(f1, index=True)
+        eq_(list(f2.columns), ['x', 'y', 'time', 'index'])
+
+    def test_index_name(self):
+        f1 = pd.DataFrame([['a', 1], ['b', 2]], columns=['x', 'y'])
+        f1.index.name = 'id'
+        f2 = _to_td_convert_dataframe(f1, index=True)
+        eq_(list(f2.columns), ['x', 'y', 'time', 'id'])
+
+    def test_index_label(self):
+        f1 = pd.DataFrame([['a', 1], ['b', 2]], columns=['x', 'y'])
+        f2 = _to_td_convert_dataframe(f1, index=True, index_label='id')
+        eq_(list(f2.columns), ['x', 'y', 'time', 'id'])
+
+    def test_multi_index(self):
+        f1 = pd.DataFrame([['a', 1], ['b', 2]], columns=['x', 'y'], index=[[0, 1], [0, 1]])
+        f2 = _to_td_convert_dataframe(f1, index=True)
+        eq_(list(f2.columns), ['x', 'y', 'time', 'level_0', 'level_1'])
+
+    def test_multi_index_name(self):
+        f1 = pd.DataFrame([['a', 1], ['b', 2]], columns=['x', 'y'], index=[[0, 1], [0, 1]])
+        f1.index.names = ['id1', 'id2']
+        f2 = _to_td_convert_dataframe(f1, index=True)
+        eq_(list(f2.columns), ['x', 'y', 'time', 'id1', 'id2'])
+
+    def test_multi_index_label(self):
+        f1 = pd.DataFrame([['a', 1], ['b', 2]], columns=['x', 'y'], index=[[0, 1], [0, 1]])
+        f2 = _to_td_convert_dataframe(f1, index=True, index_label=['id1', 'id2'])
+        eq_(list(f2.columns), ['x', 'y', 'time', 'id1', 'id2'])
