@@ -281,14 +281,14 @@ SELECT {columns}
 FROM {table_name}
 """.format(columns = '*' if columns is None else ', '.join(columns),
            table_name = table_name)
-    if sample:
+    if sample is not None:
         if sample < 0 or sample > 1:
             raise ValueError('sample must be between 0.0 and 1.0')
         query += "TABLESAMPLE BERNOULLI ({0})\n".format(sample * 100)
-    if time_range:
+    if time_range is not None:
         start, end = time_range
         query += "WHERE td_time_range(time, {0}, {1})\n".format(_convert_time(start), _convert_time(end))
-    if limit:
+    if limit is not None:
         query += "LIMIT {0}\n".format(limit)
     # execute
     r = engine.execute(query)
