@@ -362,7 +362,7 @@ def to_td(frame, name, con, if_exists='fail', time_col=None, time_index=None, in
             raise RuntimeError('table "%s" already exists' % name)
     elif if_exists == 'replace':
         try:
-            t = con.client.table(database, table)
+            con.client.table(database, table)
         except tdclient.api.NotFoundError:
             pass
         else:
@@ -377,13 +377,13 @@ def to_td(frame, name, con, if_exists='fail', time_col=None, time_index=None, in
         raise ValueError('invalid value for if_exists: %s' % if_exists)
 
     # convert
-    frame = _to_td_convert_dataframe(frame, time_col, time_index, index, index_label)
+    frame = _convert_dataframe(frame, time_col, time_index, index, index_label)
 
     # upload
     uploader = StreamingUploader(con.client, database, table)
     uploader.upload_frame(frame, chunksize)
 
-def _to_td_convert_dataframe(frame, time_col=None, time_index=None, index=None, index_label=None):
+def _convert_dataframe(frame, time_col=None, time_index=None, index=None, index_label=None):
     frame = frame.copy()
 
     # time column
