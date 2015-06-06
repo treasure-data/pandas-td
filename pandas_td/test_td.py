@@ -334,6 +334,8 @@ class ToTdTestCase(TestCase):
     def test_invalid_table_name(self):
         to_td(self.frame, 'invalid', self.connection)
 
+    # if_exists
+
     @raises(ValueError)
     def test_invalid_if_exists(self):
         to_td(self.frame, 'test_db.test_table', self.connection, if_exists='invalid')
@@ -385,6 +387,8 @@ class ToTdTestCase(TestCase):
         to_td(self.frame, 'test_db.test_table', self.connection, if_exists='append')
         client.create_log_table.assert_called_once_with('test_db', 'test_table')
 
+    # time_col
+
     @raises(ValueError)
     def test_error_time_col_and_time_index(self):
         _convert_dataframe(self.frame, time_col='x', time_index=0)
@@ -420,6 +424,8 @@ class ToTdTestCase(TestCase):
         f1['time'] = '2001-01-01'
         f2 = _convert_dataframe(f1, time_col='time')
         eq_(list(f2.columns), ['x', 'y', 'time'])
+
+    # time_index
 
     @raises(TypeError)
     def test_invalid_arg_time_index(self):
@@ -460,6 +466,18 @@ class ToTdTestCase(TestCase):
         date_range = pd.date_range('2015-01-01', periods=2, freq='d')
         f1 = pd.DataFrame([['a', 1], ['b', 2]], columns=['x', 'y'], index=[[0, 1], date_range])
         f2 = _convert_dataframe(f1, time_index=1)
+        eq_(list(f2.columns), ['x', 'y', 'time'])
+
+    # index / index_label
+
+    @raises(TypeError)
+    def test_invalid_index_type(self):
+        f1 = pd.DataFrame([['a', 1], ['b', 2]], columns=['x', 'y'])
+        f2 = _convert_dataframe(f1, index=0)
+
+    def test_no_index(self):
+        f1 = pd.DataFrame([['a', 1], ['b', 2]], columns=['x', 'y'])
+        f2 = _convert_dataframe(f1, index=False)
         eq_(list(f2.columns), ['x', 'y', 'time'])
 
     def test_index(self):

@@ -417,7 +417,9 @@ def _convert_dataframe(frame, time_col=None, time_index=None, index=None, index_
         frame['time'] = int(time.time())
 
     # index column
-    if index is not None:
+    if index is not None and not isinstance(index, bool):
+        raise TypeError('index must be boolean')
+    if index:
         if isinstance(frame.index, pd.MultiIndex):
             if index_label is None:
                 index_label = [v if v else "level_%d" % i for i, v in enumerate(frame.index.names)]
