@@ -399,14 +399,14 @@ class ToTdTestCase(TestCase):
         f2 = _convert_dataframe(f1)
         eq_(list(f2.columns), ['x', 'y', 'time'])
 
+    def test_time_col_rename(self):
+        f1 = pd.DataFrame([[0, 'a', 1], [0, 'b', 2]], columns=['unixtime', 'x', 'y'])
+        f2 = _convert_dataframe(f1, time_col='unixtime')
+        eq_(list(f2.columns), ['time', 'x', 'y'])
+
     def test_time_col_by_unixtime(self):
         f1 = pd.DataFrame([[0, 'a', 1], [0, 'b', 2]], columns=['time', 'x', 'y'])
         f2 = _convert_dataframe(f1, time_col='time')
-        eq_(list(f2.columns), ['time', 'x', 'y'])
-
-    def test_time_col_by_unixtime_rename(self):
-        f1 = pd.DataFrame([[0, 'a', 1], [0, 'b', 2]], columns=['unixtime', 'x', 'y'])
-        f2 = _convert_dataframe(f1, time_col='unixtime')
         eq_(list(f2.columns), ['time', 'x', 'y'])
 
     def test_time_col_by_datetime(self):
@@ -415,10 +415,10 @@ class ToTdTestCase(TestCase):
         f2 = _convert_dataframe(f1, time_col='time')
         eq_(list(f2.columns), ['x', 'y', 'time'])
 
-    def test_time_col_by_datetime_rename(self):
+    def test_time_col_by_string(self):
         f1 = pd.DataFrame([['a', 1], ['b', 2]], columns=['x', 'y'])
-        f1['date'] = pd.to_datetime('2001-01-01')
-        f2 = _convert_dataframe(f1, time_col='date')
+        f1['time'] = '2001-01-01'
+        f2 = _convert_dataframe(f1, time_col='time')
         eq_(list(f2.columns), ['x', 'y', 'time'])
 
     @raises(TypeError)

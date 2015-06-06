@@ -336,8 +336,8 @@ def to_td(frame, name, con, if_exists='fail', time_col=None, time_index=None, in
         - append: If table exists, insert data. Create if does not exist.
     time_col : string, optional
         Column name to use as "time" column for the table. Column type must be
-        integer (unixtime) or datetime. If None is given (default), then the current
-        time is used as time values.
+        integer (unixtime), datetime, or string. If None is given (default),
+        then the current time is used as time values.
     time_index : int, optional
         Level of index to use as "time" column for the table. Set 0 for a single index.
         This parameter implies index=False.
@@ -392,15 +392,13 @@ def _convert_dataframe(frame, time_col=None, time_index=None, index=None, index_
     if 'time' in frame.columns and time_col != 'time':
         raise ValueError('"time" column already exists')
     if time_col is not None:
-        col = frame[time_col]
-        if col.dtype not in (np.dtype('int64'), np.dtype('datetime64[ns]')):
-            raise TypeError('time type must be either int64 or datetime64')
-        if col.dtype != np.dtype('int64'):
-            frame['time'] = col.astype(np.int64, copy=True) // (10 ** 9)
-            if time_col != 'time':
-                frame.drop(time_col, axis=1, inplace=True)
-        elif time_col != 'time':
+        if time_col != 'time':
             frame.rename(columns={time_col: 'time'}, inplace=True)
+        col = frame['time']
+        if col.dtype != np.dtype('int64'):
+            if col.dtype != np.dtype('datetime64[ns]'):
+                col = pd.to_datetime(col)
+            frame['time'] = col.astype(np.int64, copy=True) // (10 ** 9)
     elif time_index is not None:
         if type(time_index) is bool or not isinstance(time_index, six.integer_types):
             raise TypeError('invalid type for time_index')
