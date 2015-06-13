@@ -75,13 +75,11 @@ class QueryEngine(object):
 
         # status check
         if not job.success():
-            stderr = job.debug['stderr']
-            if stderr:
-                logger.error(stderr)
-            raise RuntimeError("job {0} {1}\n\nOutput:\n{2}".format(
-                job.job_id,
-                job.status(),
-                job.debug['cmdout']))
+            if not job.debug:
+                job.update()
+            if job.debug and job.debug['stderr'] and job.debug['cmdout']:
+                logger.error("{0}\nOutput:\n{1}".format(job.debug['stderr'], job.debug['cmdout']))
+            raise RuntimeError("job {0} {1}".format(job.job_id, job.status()))
 
         # result
         return ResultProxy(self, job)
