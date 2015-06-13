@@ -34,7 +34,7 @@ class Connection(object):
     @property
     def client(self):
         if not hasattr(self, '_client'):
-            self._client = tdclient.Client(self.apikey, self.endpoint, **self._kwargs)
+            self._client = tdclient.Client(apikey=self.apikey, endpoint=self.endpoint, **self._kwargs)
         return self._client
 
     def databases(self):
