@@ -3,6 +3,8 @@ import datetime
 import gzip
 import io
 import os
+import re
+import sys
 import time
 import uuid
 import zlib
@@ -13,6 +15,12 @@ import pandas as pd
 import requests
 import six
 import tdclient
+
+try:
+    import IPython
+    import IPython.display
+except ImportError:
+    IPython = None
 
 import logging
 logger = logging.getLogger(__name__)
@@ -59,10 +67,85 @@ class Connection(object):
         return QueryEngine(self, database, kwargs)
 
 class QueryEngine(object):
-    def __init__(self, connection, database, params=None):
+    def __init__(self, connection, database, params=None, show_progress=5):
         self.connection = connection
         self.database = database
         self._params = {} if params is None else params
+        self.show_progress = False
+        if IPython and not sys.stdout.isatty():
+            # Enable progress for IPython notebook
+            self.show_progress = show_progress
+
+    def _html_text(self, text):
+        return '<div style="color: #888;"># {0}</div>'.format(text)
+
+    def _html_code(self, code):
+        return '<pre>{0}</pre>'.format(code)
+
+    def _html_presto_output(self, output):
+        html = ''
+        # started at
+        for text in re.findall(r'started at.*', output):
+            html += self._html_text(text)
+        # warning
+        html += '<pre style="color: #c44;">'
+        for text in re.findall(r'\n\*\* .*', output):
+            html += '{0}'.format(text)
+        html += '</pre>\n'
+        # progress
+        progress = None
+        for progress in re.findall(r'\n(\d{4}-\d{2}-\d{2}.*(?:\n .*)+)', output):
+            pass
+        if progress:
+            html += self._html_code(progress)
+        # finished at
+        for rows, finished in re.findall(r'\n(\d+ rows.*)\n(finished at.*)', output):
+            html += '{0}<br>'.format(rows)
+            html += self._html_text(finished)
+        return html
+
+    def _display_progress(self, job, cursize=None):
+        if not self.show_progress:
+            return
+        if isinstance(self.show_progress, six.integer_types) and hasattr(job, 'issued_at'):
+            if datetime.datetime.utcnow() < job.issued_at + datetime.timedelta(seconds=self.show_progress):
+                return
+        # header
+        html = '<div style="border-style: dashed; border-width: 1px;">\n'
+        # issued at
+        if hasattr(job, 'issued_at'):
+            html += self._html_text('issued at {0}Z'.format(job.issued_at.isoformat()))
+        html += 'URL: <a href="{0}" target="_blank">{0}</a><br>\n'.format(job.url)
+        # query output
+        if job.type == 'presto':
+            if job.debug and job.debug['cmdout']:
+                html += self._html_presto_output(job.debug['cmdout'])
+        if job.result_size:
+            html += "Result size: {:,} bytes<br>\n".format(job.result_size)
+        if cursize:
+            html += "Download: {:,} / ".format(cursize)
+            html += "{:,} bytes".format(job.result_size)
+            html += " (%.2f%%)<br>\n" % (cursize * 100.0 / job.result_size)
+            if cursize >= job.result_size:
+                now = datetime.datetime.utcnow().replace(microsecond=0)
+                html += self._html_text('downloaded at {0}Z'.format(now.isoformat()))
+        # footer
+        html += '</div>\n'
+        # display
+        IPython.display.clear_output(True)
+        IPython.display.display(IPython.display.HTML(html))
+
+    def wait(self, job):
+        try:
+            while not job.finished():
+                time.sleep(2)
+                job.update()
+                self._display_progress(job)
+            job.update()
+            self._display_progress(job)
+        except KeyboardInterrupt:
+            job.kill()
+            raise
 
     def execute(self, query, **kwargs):
         # parameters
@@ -70,13 +153,13 @@ class QueryEngine(object):
         params.update(kwargs)
 
         # issue query
+        issued_at = datetime.datetime.utcnow().replace(microsecond=0)
         job = self.connection.client.query(self.database, query, **params)
-        job.wait()
+        job.issued_at = issued_at
+        self.wait(job)
 
         # status check
         if not job.success():
-            if not job.debug:
-                job.update()
             if job.debug and job.debug['stderr'] and job.debug['cmdout']:
                 logger.error("{0}\nOutput:\n{1}".format(job.debug['stderr'], job.debug['cmdout']))
             raise RuntimeError("job {0} {1}".format(job.job_id, job.status()))
@@ -87,7 +170,7 @@ class QueryEngine(object):
     def _http_get(self, uri, **kwargs):
         return requests.get(uri, **kwargs)
 
-    def download(self, job):
+    def _start_download(self, job):
         # start downloading
         headers = {
             'Authorization': 'TD1 {0}'.format(self.connection.apikey),
@@ -99,6 +182,15 @@ class QueryEngine(object):
             format = 'msgpack.gz',
         ), headers=headers, stream=True)
         return r
+
+    def iter_content(self, job, chunk_size):
+        curval = 0
+        d = zlib.decompressobj(16+zlib.MAX_WBITS)
+        with contextlib.closing(self._start_download(job)) as r:
+            for chunk in r.iter_content(chunk_size):
+                curval += len(chunk)
+                self._display_progress(job, curval)
+                yield d.decompress(chunk)
 
 class ResultProxy(object):
     def __init__(self, engine, job):
@@ -118,23 +210,9 @@ class ResultProxy(object):
     def description(self):
         return self.job.result_schema
 
-    def iter_content(self, chunk_size):
-        r = self.engine.download(self.job)
-
-        # content length
-        maxval = None
-        if 'Content-length' in r.headers:
-            maxval = int(r.headers['Content-length'])
-
-        # download
-        d = zlib.decompressobj(16+zlib.MAX_WBITS)
-        with contextlib.closing(r):
-            for chunk in r.iter_content(chunk_size):
-                yield d.decompress(chunk)
-
     def read(self, size=16384):
         if self._iter is None:
-            self._iter = self.iter_content(size)
+            self._iter = self.engine.iter_content(self.job, size)
         try:
             return next(self._iter)
         except StopIteration:
@@ -393,7 +471,7 @@ def _convert_dataframe(frame, time_col=None, time_index=None, index=None, index_
         if time_col != 'time':
             frame.rename(columns={time_col: 'time'}, inplace=True)
         col = frame['time']
-        if col.dtype != np.dtype('int64'):
+        if col.dtype != np.int64:
             if col.dtype != np.dtype('datetime64[ns]'):
                 col = pd.to_datetime(col)
             frame['time'] = col.astype(np.int64, copy=True) // (10 ** 9)

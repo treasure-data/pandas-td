@@ -36,6 +36,7 @@ class MockJob(object):
         self.result = [{'c1': i, 'c2': '2001-01-01', 'time': i} for i in range(100)]
         self.result_bytes = self._pack_gz(self.result)
         self.job_id = 1
+        self.type = 'presto'
         self.result_size = len(self.result_bytes)
         self.result_schema = [['c1', 'int'], ['c2', 'string'], ['time', 'int']]
         self.debug = {
@@ -52,8 +53,14 @@ class MockJob(object):
             f.write(packer.bytes())
         return buff.getvalue()
 
-    def wait(self):
-        pass
+    def url(self):
+        return 'https://mock/jobs/1'
+
+    def finished(self):
+        return True
+
+    def update(self):
+        return True
 
     def status(self):
         return self._status
@@ -116,6 +123,12 @@ class ConnectionConfigurationTestCase(TestCase):
 class ConnectionTestCase(TestCase):
     def setUp(self):
         self.connection = Connection('test-key', 'test-endpoint')
+
+    def test_empty_databases(self):
+        client = self.connection.client
+        client.databases = MagicMock(return_value=[])
+        d = self.connection.databases()
+        eq_(len(d), 0)
 
     def test_databases(self):
         TestDatabase = collections.namedtuple('TestDatabase',
