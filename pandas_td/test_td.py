@@ -147,6 +147,12 @@ class ConnectionTestCase(TestCase):
         eq_(len(d), 1)
         eq_(d.name[0], 'test_db')
 
+    def test_empty_tables(self):
+        client = self.connection.client
+        client.tables = MagicMock(return_value=[])
+        d = self.connection.tables('test_db')
+        eq_(len(d), 0)
+
     def test_tables(self):
         TestTable = collections.namedtuple('TestTable',
                                            ['name', 'count', 'estimated_storage_size', 'created_at', 'last_log_timestamp'])

@@ -79,9 +79,6 @@ class QueryEngine(object):
     def _html_text(self, text):
         return '<div style="color: #888;"># {0}</div>'.format(text)
 
-    def _html_code(self, code):
-        return '<pre>{0}</pre>'.format(code)
-
     def _html_presto_output(self, output):
         html = ''
         # started at
@@ -97,7 +94,7 @@ class QueryEngine(object):
         for progress in re.findall(r'\n(\d{4}-\d{2}-\d{2}.*(?:\n .*)+)', output):
             pass
         if progress:
-            html += self._html_code(progress)
+            html += '<pre>{0}</pre>'.format(progress)
         # finished at
         for rows, finished in re.findall(r'\n(\d+ rows.*)\n(finished at.*)', output):
             html += '{0}<br>'.format(rows)
