@@ -255,6 +255,13 @@ class StreamingUploaderTestCase(TestCase):
             records = records[1:]
         eq_(records, [])
 
+    def test_drop_nan(self):
+        records = [{'x': 'a', 'y': np.nan}, {'x': np.nan, 'y': 1.0}]
+        data = self.uploader._pack(pd.DataFrame(records))
+        unpacker = msgpack.Unpacker(io.BytesIO(data), encoding='utf-8')
+        eq_(unpacker.unpack(), {'x': 'a'})
+        eq_(unpacker.unpack(), {'y': 1.0})
+
     def test_gzip(self):
         data = self.uploader._gzip(b'abc')
         with gzip.GzipFile(fileobj=io.BytesIO(data)) as f:

@@ -257,8 +257,8 @@ class StreamingUploader(object):
     def _pack(self, chunk):
         packer = msgpack.Packer(autoreset=False)
         for _, row in chunk.iterrows():
-            record = dict(row)
-            packer.pack(record)
+            row.dropna(inplace=True)
+            packer.pack(dict(row))
         return packer.bytes()
 
     def _gzip(self, data):
