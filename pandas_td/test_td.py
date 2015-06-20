@@ -3,7 +3,8 @@ from .td import Connection
 from .td import QueryEngine
 from .td import ResultProxy
 from .td import StreamingUploader
-from .td import _convert_dataframe
+from .td import _convert_time_column
+from .td import _convert_index_column
 
 from pandas_td import connect
 from pandas_td import read_td
@@ -417,38 +418,38 @@ class ToTdTestCase(TestCase):
 
     @raises(ValueError)
     def test_error_time_col_and_time_index(self):
-        _convert_dataframe(self.frame, time_col='x', time_index=0)
+        _convert_time_column(self.frame, time_col='x', time_index=0)
 
     @raises(ValueError)
     def test_error_time_column_already_exists(self):
         f1 = pd.DataFrame([[0, 'a', 1], [0, 'b', 2]], columns=['time', 'x', 'y'])
-        f2 = _convert_dataframe(f1)
+        f2 = _convert_time_column(f1)
 
     def test_time_now(self):
         f1 = pd.DataFrame([['a', 1], ['b', 2]], columns=['x', 'y'])
-        f2 = _convert_dataframe(f1)
+        f2 = _convert_time_column(f1)
         eq_(list(f2.columns), ['x', 'y', 'time'])
 
     def test_time_col_rename(self):
         f1 = pd.DataFrame([[0, 'a', 1], [0, 'b', 2]], columns=['unixtime', 'x', 'y'])
-        f2 = _convert_dataframe(f1, time_col='unixtime')
+        f2 = _convert_time_column(f1, time_col='unixtime')
         eq_(list(f2.columns), ['time', 'x', 'y'])
 
     def test_time_col_by_unixtime(self):
         f1 = pd.DataFrame([[0, 'a', 1], [0, 'b', 2]], columns=['time', 'x', 'y'])
-        f2 = _convert_dataframe(f1, time_col='time')
+        f2 = _convert_time_column(f1, time_col='time')
         eq_(list(f2.columns), ['time', 'x', 'y'])
 
     def test_time_col_by_datetime(self):
         f1 = pd.DataFrame([['a', 1], ['b', 2]], columns=['x', 'y'])
         f1['time'] = pd.to_datetime('2001-01-01')
-        f2 = _convert_dataframe(f1, time_col='time')
+        f2 = _convert_time_column(f1, time_col='time')
         eq_(list(f2.columns), ['x', 'y', 'time'])
 
     def test_time_col_by_string(self):
         f1 = pd.DataFrame([['a', 1], ['b', 2]], columns=['x', 'y'])
         f1['time'] = '2001-01-01'
-        f2 = _convert_dataframe(f1, time_col='time')
+        f2 = _convert_time_column(f1, time_col='time')
         eq_(list(f2.columns), ['x', 'y', 'time'])
 
     # time_index
@@ -457,41 +458,41 @@ class ToTdTestCase(TestCase):
     def test_invalid_arg_time_index(self):
         date_range = pd.date_range('2015-01-01', periods=2, freq='d')
         f1 = pd.DataFrame([['a', 1], ['b', 2]], columns=['x', 'y'], index=date_range)
-        f2 = _convert_dataframe(f1, time_index=True)
+        f2 = _convert_time_column(f1, time_index=True)
 
     @raises(IndexError)
     def test_invalid_level_time_index(self):
         date_range = pd.date_range('2015-01-01', periods=2, freq='d')
         f1 = pd.DataFrame([['a', 1], ['b', 2]], columns=['x', 'y'], index=date_range)
-        f2 = _convert_dataframe(f1, time_index=1)
+        f2 = _convert_time_column(f1, time_index=1)
 
     @raises(TypeError)
     def test_invalid_value_time_index(self):
         f1 = pd.DataFrame([['a', 1], ['b', 2]], columns=['x', 'y'])
-        f2 = _convert_dataframe(f1, time_index=0)
+        f2 = _convert_time_column(f1, time_index=0)
 
     def test_time_index(self):
         date_range = pd.date_range('2015-01-01', periods=2, freq='d')
         f1 = pd.DataFrame([['a', 1], ['b', 2]], columns=['x', 'y'], index=date_range)
-        f2 = _convert_dataframe(f1, time_index=0)
+        f2 = _convert_time_column(f1, time_index=0)
         eq_(list(f2.columns), ['x', 'y', 'time'])
 
     @raises(IndexError)
     def test_invalid_level_time_index_multi(self):
         date_range = pd.date_range('2015-01-01', periods=2, freq='d')
         f1 = pd.DataFrame([['a', 1], ['b', 2]], columns=['x', 'y'], index=[[0, 1], date_range])
-        f2 = _convert_dataframe(f1, time_index=2)
+        f2 = _convert_time_column(f1, time_index=2)
 
     @raises(TypeError)
     def test_invalid_value_time_index_multi(self):
         date_range = pd.date_range('2015-01-01', periods=2, freq='d')
         f1 = pd.DataFrame([['a', 1], ['b', 2]], columns=['x', 'y'], index=[[0, 1], date_range])
-        f2 = _convert_dataframe(f1, time_index=0)
+        f2 = _convert_time_column(f1, time_index=0)
 
     def test_time_index_multi(self):
         date_range = pd.date_range('2015-01-01', periods=2, freq='d')
         f1 = pd.DataFrame([['a', 1], ['b', 2]], columns=['x', 'y'], index=[[0, 1], date_range])
-        f2 = _convert_dataframe(f1, time_index=1)
+        f2 = _convert_time_column(f1, time_index=1)
         eq_(list(f2.columns), ['x', 'y', 'time'])
 
     # index / index_label
@@ -499,41 +500,41 @@ class ToTdTestCase(TestCase):
     @raises(TypeError)
     def test_invalid_index_type(self):
         f1 = pd.DataFrame([['a', 1], ['b', 2]], columns=['x', 'y'])
-        f2 = _convert_dataframe(f1, index=0)
+        f2 = _convert_index_column(f1, index=0)
 
     def test_no_index(self):
         f1 = pd.DataFrame([['a', 1], ['b', 2]], columns=['x', 'y'])
-        f2 = _convert_dataframe(f1, index=False)
-        eq_(list(f2.columns), ['x', 'y', 'time'])
+        f2 = _convert_index_column(f1, index=False)
+        eq_(list(f2.columns), ['x', 'y'])
 
     def test_index(self):
         f1 = pd.DataFrame([['a', 1], ['b', 2]], columns=['x', 'y'])
-        f2 = _convert_dataframe(f1, index=True)
-        eq_(list(f2.columns), ['x', 'y', 'time', 'index'])
+        f2 = _convert_index_column(f1, index=True)
+        eq_(list(f2.columns), ['x', 'y', 'index'])
 
     def test_index_name(self):
         f1 = pd.DataFrame([['a', 1], ['b', 2]], columns=['x', 'y'])
         f1.index.name = 'id'
-        f2 = _convert_dataframe(f1, index=True)
-        eq_(list(f2.columns), ['x', 'y', 'time', 'id'])
+        f2 = _convert_index_column(f1, index=True)
+        eq_(list(f2.columns), ['x', 'y', 'id'])
 
     def test_index_label(self):
         f1 = pd.DataFrame([['a', 1], ['b', 2]], columns=['x', 'y'])
-        f2 = _convert_dataframe(f1, index=True, index_label='id')
-        eq_(list(f2.columns), ['x', 'y', 'time', 'id'])
+        f2 = _convert_index_column(f1, index=True, index_label='id')
+        eq_(list(f2.columns), ['x', 'y', 'id'])
 
     def test_multi_index(self):
         f1 = pd.DataFrame([['a', 1], ['b', 2]], columns=['x', 'y'], index=[[0, 1], [0, 1]])
-        f2 = _convert_dataframe(f1, index=True)
-        eq_(list(f2.columns), ['x', 'y', 'time', 'level_0', 'level_1'])
+        f2 = _convert_index_column(f1, index=True)
+        eq_(list(f2.columns), ['x', 'y', 'level_0', 'level_1'])
 
     def test_multi_index_name(self):
         f1 = pd.DataFrame([['a', 1], ['b', 2]], columns=['x', 'y'], index=[[0, 1], [0, 1]])
         f1.index.names = ['id1', 'id2']
-        f2 = _convert_dataframe(f1, index=True)
-        eq_(list(f2.columns), ['x', 'y', 'time', 'id1', 'id2'])
+        f2 = _convert_index_column(f1, index=True)
+        eq_(list(f2.columns), ['x', 'y', 'id1', 'id2'])
 
     def test_multi_index_label(self):
         f1 = pd.DataFrame([['a', 1], ['b', 2]], columns=['x', 'y'], index=[[0, 1], [0, 1]])
-        f2 = _convert_dataframe(f1, index=True, index_label=['id1', 'id2'])
-        eq_(list(f2.columns), ['x', 'y', 'time', 'id1', 'id2'])
+        f2 = _convert_index_column(f1, index=True, index_label=['id1', 'id2'])
+        eq_(list(f2.columns), ['x', 'y', 'id1', 'id2'])

@@ -449,17 +449,20 @@ def to_td(frame, name, con, if_exists='fail', time_col=None, time_index=None, in
     else:
         raise ValueError('invalid value for if_exists: %s' % if_exists)
 
+    # "time_index" implies "index=False"
+    if time_index:
+        index = None
+
     # convert
-    frame = _convert_dataframe(frame, time_col, time_index, index, index_label)
+    frame = frame.copy()
+    frame = _convert_time_column(frame, time_col, time_index)
+    frame = _convert_index_column(frame, index, index_label)
 
     # upload
     uploader = StreamingUploader(con.client, database, table)
     uploader.upload_frame(frame, chunksize)
 
-def _convert_dataframe(frame, time_col=None, time_index=None, index=None, index_label=None):
-    frame = frame.copy()
-
-    # time column
+def _convert_time_column(frame, time_col=None, time_index=None):
     if time_col is not None and time_index is not None:
         raise ValueError('time_col and time_index cannot be used at the same time')
     if 'time' in frame.columns and time_col != 'time':
@@ -485,11 +488,11 @@ def _convert_dataframe(frame, time_col=None, time_index=None, index=None, index_
         if idx.dtype != np.dtype('datetime64[ns]'):
             raise TypeError('index type must be datetime64[ns]')
         frame['time'] = idx.astype(np.int64) // (10 ** 9)
-        index = None
     else:
         frame['time'] = int(time.time())
+    return frame
 
-    # index column
+def _convert_index_column(frame, index=None, index_label=None):
     if index is not None and not isinstance(index, bool):
         raise TypeError('index must be boolean')
     if index:
@@ -502,5 +505,4 @@ def _convert_dataframe(frame, time_col=None, time_index=None, index=None, index_
             if index_label is None:
                 index_label = frame.index.name if frame.index.name else 'index'
             frame[index_label] = frame.index.astype('object')
-
     return frame
