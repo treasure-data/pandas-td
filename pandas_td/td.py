@@ -383,7 +383,7 @@ def _convert_time(time):
 # alias
 read_td = read_td_query
 
-def to_td(frame, name, con, if_exists='fail', time_col=None, time_index=None, index=True, index_label=None, chunksize=10000):
+def to_td(frame, name, con, if_exists='fail', time_col=None, time_index=None, index=True, index_label=None, chunksize=10000, date_format=None):
     '''Write a DataFrame to a Treasure Data table.
 
     This method converts the dataframe into a series of key-value pairs
@@ -422,6 +422,8 @@ def to_td(frame, name, con, if_exists='fail', time_col=None, time_index=None, in
         MultiIndex.
     chunksize : int, default 10,000
         Number of rows to be inserted in each chunk from the dataframe.
+    date_format : string, default None
+        Format string for datetime objects
     '''
     database, table = name.split('.')
 
@@ -457,6 +459,7 @@ def to_td(frame, name, con, if_exists='fail', time_col=None, time_index=None, in
     frame = frame.copy()
     frame = _convert_time_column(frame, time_col, time_index)
     frame = _convert_index_column(frame, index, index_label)
+    frame = _convert_date_format(frame, date_format)
 
     # upload
     uploader = StreamingUploader(con.client, database, table)
@@ -505,4 +508,13 @@ def _convert_index_column(frame, index=None, index_label=None):
             if index_label is None:
                 index_label = frame.index.name if frame.index.name else 'index'
             frame[index_label] = frame.index.astype('object')
+    return frame
+
+def _convert_date_format(frame, date_format=None):
+    if date_format is not None:
+        def _convert(col):
+            if col.dtype == np.dtype('datetime64[ns]'):
+                return col.apply(lambda x: x.strftime(date_format))
+            return col
+        frame = frame.apply(_convert)
     return frame

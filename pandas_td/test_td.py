@@ -5,6 +5,7 @@ from .td import ResultProxy
 from .td import StreamingUploader
 from .td import _convert_time_column
 from .td import _convert_index_column
+from .td import _convert_date_format
 
 from pandas_td import connect
 from pandas_td import read_td
@@ -361,6 +362,17 @@ class ToTdTestCase(TestCase):
     def test_invalid_table_name(self):
         to_td(self.frame, 'invalid', self.connection)
 
+    @raises(TypeError)
+    def test_datetime_is_not_supported(self):
+        # mock
+        client = self.connection.client
+        client.table = MagicMock(side_effect=tdclient.api.NotFoundError('test_table'))
+        client.create_log_table = MagicMock()
+        client.import_data = MagicMock()
+        # test
+        frame = pd.DataFrame({'timestamp': [datetime.datetime(2000,1,1)]})
+        to_td(frame, 'test_db.test_table', self.connection)
+
     # if_exists
 
     @raises(ValueError)
@@ -538,3 +550,11 @@ class ToTdTestCase(TestCase):
         f1 = pd.DataFrame([['a', 1], ['b', 2]], columns=['x', 'y'], index=[[0, 1], [0, 1]])
         f2 = _convert_index_column(f1, index=True, index_label=['id1', 'id2'])
         eq_(list(f2.columns), ['x', 'y', 'id1', 'id2'])
+
+    # date_format
+
+    def test_date_format(self):
+        ts = datetime.datetime(2000, 1, 2, 3, 4, 5)
+        f1 = pd.DataFrame([['a', ts], ['b', ts]], columns=['x', 'y'])
+        f2 = _convert_date_format(f1, date_format='%Y-%m-%d %T')
+        eq_(f2['y'].tolist(), ['2000-01-02 03:04:05', '2000-01-02 03:04:05'])
