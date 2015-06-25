@@ -1,0 +1,4 @@
+pandas
+pandas_td
+matplotlib
+ipython[notebook]
