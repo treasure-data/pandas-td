@@ -7,10 +7,20 @@
 
 ## Install
 
-You can install the releases from [PyPI](https://pypi.python.org/).
+You can install the releases from [PyPI](https://pypi.python.org/):
 
 ```sh
 $ pip install pandas-td
+```
+
+For Mac OS X users, you can install [Pandas](http://pandas.pydata.org/) and [Jupyter](https://jupyter.org/) as follows:
+
+```sh
+# Use Homebrew to install Python
+$ brew install python
+
+# Install pandas, pandas-td, matplotlib, and ipython[notebook]
+$ pip install -r https://raw.githubusercontent.com/treasure-data/pandas-td/master/contrib/jupyter/requirements.txt
 ```
 
 ## Examples
