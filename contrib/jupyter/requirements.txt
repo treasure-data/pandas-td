@@ -1,4 +1,4 @@
 pandas
-pandas_td
+pandas-td
 matplotlib
 ipython[notebook]
