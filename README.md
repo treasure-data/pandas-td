@@ -5,6 +5,8 @@
 [![Coverage Status](https://coveralls.io/repos/treasure-data/pandas-td/badge.svg?branch=master)](https://coveralls.io/r/treasure-data/pandas-td?branch=master)
 [![PyPI version](https://badge.fury.io/py/pandas-td.svg)](http://badge.fury.io/py/pandas-td)
 
+[![Pandas-TD](https://raw.githubusercontent.com/treasure-data/pandas-td/master/doc/images/pandas-td.png)](https://github.com/treasure-data/pandas-td/blob/master/doc/tutorial.ipynb)
+
 ## Install
 
 You can install the releases from [PyPI](https://pypi.python.org/):
