@@ -16,6 +16,9 @@ import pandas as pd
 import requests
 import six
 import tdclient
+import tdclient.version
+
+from pandas_td.version import __version__
 
 try:
     # Python 3.x
@@ -35,25 +38,30 @@ except ImportError:
 import logging
 logger = logging.getLogger(__name__)
 
-DEFAULT_ENDPOINT = 'https://api.treasuredata.com/'
-
 class Connection(object):
     def __init__(self, apikey=None, endpoint=None, **kwargs):
-        if apikey is None:
-            apikey = os.environ['TD_API_KEY']
-        if endpoint is None:
-            endpoint = DEFAULT_ENDPOINT
-        if not endpoint.endswith('/'):
-            endpoint = endpoint + '/'
-        self.apikey = apikey
-        self.endpoint = endpoint
-        self._kwargs = kwargs
+        if apikey is not None:
+            kwargs['apikey'] = apikey
+        if endpoint is not None:
+            if not endpoint.endswith('/'):
+                endpoint = endpoint + '/'
+            kwargs['endpoint'] = endpoint
+        if 'user_agent' not in kwargs:
+            versions = [
+                "pandas/{0}".format(pd.__version__),
+                "tdclient/{0}".format(tdclient.version.__version__),
+                "Python/{0}.{1}.{2}.{3}.{4}".format(*list(sys.version_info)),
+            ]
+            kwargs['user_agent'] = "pandas-td/{0} ({1})".format(__version__, ' '.join(versions))
+        self.client = tdclient.Client(**kwargs)
 
     @property
-    def client(self):
-        if not hasattr(self, '_client'):
-            self._client = tdclient.Client(apikey=self.apikey, endpoint=self.endpoint, **self._kwargs)
-        return self._client
+    def apikey(self):
+        return self.client.api.apikey
+
+    @property
+    def endpoint(self):
+        return self.client.api.endpoint
 
     def databases(self):
         databases = self.client.databases()
@@ -195,6 +203,7 @@ class QueryEngine(object):
         headers = {
             'Authorization': 'TD1 {0}'.format(self.connection.apikey),
             'Accept-Encoding': 'deflate, gzip',
+            'User-Agent': "pandas-td/{0} ({1})".format(__version__, requests.utils.default_user_agent()),
         }
         r = self._http_get('{endpoint}v3/job/result/{job_id}?format={format}'.format(
             endpoint = self.connection.endpoint,
