@@ -1,4 +1,3 @@
-from .td import DEFAULT_ENDPOINT
 from .td import Connection
 from .td import QueryEngine
 from .td import ResultProxy
@@ -97,7 +96,7 @@ class ConnectionConfigurationTestCase(TestCase):
         os.environ.clear()
         os.environ.update(self._environ)
 
-    @raises(KeyError)
+    @raises(ValueError)
     def test_error_without_parameters(self):
         Connection()
 
@@ -114,7 +113,7 @@ class ConnectionConfigurationTestCase(TestCase):
         os.environ['TD_API_KEY'] = 'test-key'
         # default
         c1 = Connection()
-        eq_(c1.endpoint, DEFAULT_ENDPOINT)
+        eq_(c1.endpoint, 'https://api.treasuredata.com/')
         # parameter
         c2 = Connection(endpoint='http://api/')
         eq_(c2.endpoint, 'http://api/')
