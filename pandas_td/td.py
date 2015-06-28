@@ -63,7 +63,8 @@ class Connection(object):
         else:
             return pd.DataFrame()
 
-    def query_engine(self, database, **kwargs):
+    def query_engine(self, database, type='presto', **kwargs):
+        kwargs['type'] = type
         return QueryEngine(self, database, kwargs)
 
 class QueryEngine(object):
