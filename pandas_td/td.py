@@ -7,6 +7,7 @@ import re
 import sys
 import time
 import uuid
+import warnings
 import zlib
 
 import msgpack
@@ -15,6 +16,15 @@ import pandas as pd
 import requests
 import six
 import tdclient
+
+try:
+    # Python 3.x
+    from urllib.parse import urlparse
+    from urllib.parse import parse_qsl
+except ImportError:
+    # Python 2.x
+    from urlparse import urlparse
+    from urlparse import parse_qsl
 
 try:
     import IPython
@@ -63,19 +73,31 @@ class Connection(object):
         else:
             return pd.DataFrame()
 
-    def query_engine(self, database, type='presto', **kwargs):
-        kwargs['type'] = type
-        return QueryEngine(self, database, kwargs)
+    def query_engine(self, database, **kwargs):
+        warnings.warn("'query_engine' is deprecated. Use 'create_engine' instead.", DeprecationWarning)
+        return QueryEngine(self, database, kwargs, header=True, show_progress=5)
 
 class QueryEngine(object):
-    def __init__(self, connection, database, params=None, show_progress=5):
+    def __init__(self, connection, database, params=None, header=False, show_progress=False):
         self.connection = connection
         self.database = database
         self._params = {} if params is None else params
-        self.show_progress = False
+        self._header = header
         if IPython and not sys.stdout.isatty():
             # Enable progress for IPython notebook
             self.show_progress = show_progress
+        else:
+            self.show_progress = False
+
+    def create_header(self, name):
+        # name
+        if self._header is False:
+            header = ''
+        elif isinstance(self._header, six.string_types):
+            header = "-- {0}\n".format(self._header)
+        else:
+            header = "-- {0}\n".format(name)
+        return header
 
     def _html_text(self, text):
         return '<div style="color: #888;"># {0}</div>'.format(text)
@@ -283,6 +305,58 @@ class StreamingUploader(object):
 def connect(apikey=None, endpoint=None, **kwargs):
     return Connection(apikey, endpoint, **kwargs)
 
+def create_engine(url, con=None, header=True, show_progress=5.0):
+    '''Create a handler for query engines based on a URL.
+
+    Parameters
+    ----------
+    url : string
+        Engine descriptor in the form "type://apikey@endpoint/database?params..."
+    con : Connection, optional
+        Handler returned by connect. If not given, default connection is used.
+    header : string or boolean, default True
+        Prepend comment strings, in the form "-- comment", as a header of queries.
+        Set False to disable header.
+    show_progress : double or boolean, default 5.0
+        Number of seconds to wait before printing progress.
+        Set False to disable progress entirely.
+
+    Returns
+    -------
+    QueryEngine
+
+    Examples
+    --------
+    # presto
+    engine = create_engine('presto://APIKEY@api.treasuredata.com/DATABASE')
+
+    # hive
+    engine = create_engine('hive://APIKEY@api.treasuredata.com/DATABASE')
+
+    # use default connection
+    engine = create_engine('presto:DATABASE')
+
+    # use specific connection
+    con = connect(apikey='APIKEY', endpoint='https://api.treasuredata.com/')
+    engine = create_engine('presto:DATABASE', con=con)
+    '''
+    url = urlparse(url)
+    engine_type = url.scheme if url.scheme else 'presto'
+    if con is None:
+        if url.netloc:
+            # create connection
+            apikey, host = url.netloc.split('@')
+            con = Connection(apikey=apikey, endpoint="https://{0}/".format(host))
+        else:
+            # default connection
+            con = connect()
+    database = url.path[1:] if url.path.startswith('/') else url.path
+    params = {
+        'type': engine_type,
+    }
+    params.update(parse_qsl(url.query))
+    return QueryEngine(con, database, params, header=header, show_progress=show_progress)
+
 def read_td_query(query, engine, index_col=None, params=None, parse_dates=None):
     '''Read Treasure Data query into a DataFrame.
 
@@ -295,7 +369,7 @@ def read_td_query(query, engine, index_col=None, params=None, parse_dates=None):
     query : string
         Query string to be executed.
     engine : QueryEngine
-        Handler returned by Connection.query_engine.
+        Handler returned by create_engine.
     index_col : string, optional
         Column name to use as index for the returned DataFrame object.
     params : dict, optional
@@ -312,7 +386,10 @@ def read_td_query(query, engine, index_col=None, params=None, parse_dates=None):
     '''
     if params is None:
         params = {}
-    r = engine.execute(query, **params)
+    # query
+    header = engine.create_header("read_td_query")
+    # execute
+    r = engine.execute(header + query, **params)
     return r.to_dataframe(index_col=index_col, parse_dates=parse_dates)
 
 def read_td_table(table_name, engine, index_col=None, parse_dates=None, columns=None, time_range=None, sample=None, limit=10000):
@@ -327,7 +404,7 @@ def read_td_table(table_name, engine, index_col=None, parse_dates=None, columns=
     table_name : string
         Name of Treasure Data table in database.
     engine : QueryEngine
-        Handler returned by Connection.query_engine.
+        Handler returned by create_engine.
     index_col : string, optional
         Column name to use as index for the returned DataFrame object.
     parse_dates : list or dict, optional
@@ -350,18 +427,22 @@ def read_td_table(table_name, engine, index_col=None, parse_dates=None, columns=
     -------
     DataFrame
     '''
-    query = """-- read_td_table('{table_name}')
-SELECT {columns}
-FROM {table_name}
-""".format(columns = '*' if columns is None else ', '.join(columns),
-           table_name = table_name)
+    # header
+    query = engine.create_header("read_td_table('{0}')".format(table_name))
+    # SELECT
+    query += "SELECT {0}\n".format('*' if columns is None else ', '.join(columns))
+    # FROM
+    query += "FROM {0}\n".format(table_name)
+    # TABLESAMPLE
     if sample is not None:
         if sample < 0 or sample > 1:
             raise ValueError('sample must be between 0.0 and 1.0')
         query += "TABLESAMPLE BERNOULLI ({0})\n".format(sample * 100)
+    # WHERE
     if time_range is not None:
         start, end = time_range
         query += "WHERE td_time_range(time, {0}, {1})\n".format(_convert_time(start), _convert_time(end))
+    # LIMIT
     if limit is not None:
         query += "LIMIT {0}\n".format(limit)
     # execute

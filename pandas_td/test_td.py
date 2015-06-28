@@ -269,7 +269,7 @@ class StreamingUploaderTestCase(TestCase):
         with gzip.GzipFile(fileobj=io.BytesIO(data)) as f:
             eq_(f.read(), b'abc')
 
-class ReadTdTableQueryCase(TestCase):
+class ReadTdQueryTestCase(TestCase):
     def setUp(self):
         job = MockJob()
         self.connection = connect('test-key', 'test-endpoint')
@@ -277,9 +277,12 @@ class ReadTdTableQueryCase(TestCase):
         self.engine = self.connection.query_engine('test_db', type='presto')
         self.engine._http_get = MagicMock(return_value=MockRequest(job))
 
+    def assert_query(self, query):
+        self.connection.client.query.assert_called_with('test_db', "-- read_td_query\n" + query, type='presto')
+
     def test_ok(self):
         read_td_query('select 1', self.engine)
-        self.connection.client.query.assert_called_with('test_db', 'select 1', type='presto')
+        self.assert_query('select 1')
 
 class ReadTdTableTestCase(TestCase):
     def setUp(self):
