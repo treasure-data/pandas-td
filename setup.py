@@ -1,10 +1,16 @@
 #!/usr/bin/env python
 
+import re
 from setuptools import setup, find_packages
+
+def read_version():
+    with open("pandas_td/version.py") as f:
+        m = re.match(r'__version__ = "([^\"]*)"', f.read())
+        return m.group(1)
 
 setup(
     name="pandas-td",
-    version='0.7.4',
+    version=read_version(),
     description="Pandas extension for Treasure Data",
     author="Treasure Data, Inc.",
     author_email="support@treasure-data.com",
