@@ -97,6 +97,10 @@ class QueryEngine(object):
         else:
             self.show_progress = False
 
+    @property
+    def type(self):
+        return self._params.get('type')
+
     def create_header(self, name):
         # name
         if self._header is False:
@@ -366,7 +370,7 @@ def create_engine(url, con=None, header=True, show_progress=5.0):
     params.update(parse_qsl(url.query))
     return QueryEngine(con, database, params, header=header, show_progress=show_progress)
 
-def read_td_query(query, engine, index_col=None, params=None, parse_dates=None):
+def read_td_query(query, engine, index_col=None, parse_dates=None, distributed_join=False, params=None):
     '''Read Treasure Data query into a DataFrame.
 
     Returns a DataFrame corresponding to the result set of the query string.
@@ -381,13 +385,16 @@ def read_td_query(query, engine, index_col=None, params=None, parse_dates=None):
         Handler returned by create_engine.
     index_col : string, optional
         Column name to use as index for the returned DataFrame object.
-    params : dict, optional
-        Parameters to pass to execute method.
     parse_dates : list or dict, optional
         - List of column names to parse as dates
         - Dict of {column_name: format string} where format string is strftime
           compatible in case of parsing string times or is one of (D, s, ns, ms, us)
           in case of parsing integer timestamps
+    distributed_join : boolean, default False
+        (Presto only) If True, distributed join is enabled. If False, broadcast join is used.
+        See https://prestodb.io/docs/current/release/release-0.77.html
+    params : dict, optional
+        Parameters to pass to execute method.
 
     Returns
     -------
@@ -395,8 +402,10 @@ def read_td_query(query, engine, index_col=None, params=None, parse_dates=None):
     '''
     if params is None:
         params = {}
-    # query
+    # header
     header = engine.create_header("read_td_query")
+    if engine.type == 'presto' and distributed_join is not None:
+        header += "-- set session distributed_join = '{0}'\n".format('true' if distributed_join else 'false')
     # execute
     r = engine.execute(header + query, **params)
     return r.to_dataframe(index_col=index_col, parse_dates=parse_dates)

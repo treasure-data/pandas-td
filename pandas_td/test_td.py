@@ -277,7 +277,9 @@ class ReadTdQueryTestCase(TestCase):
         self.engine._http_get = MagicMock(return_value=MockRequest(job))
 
     def assert_query(self, query):
-        self.connection.client.query.assert_called_with('test_db', "-- read_td_query\n" + query, type='presto')
+        self.connection.client.query.assert_called_with('test_db', '''-- read_td_query
+-- set session distributed_join = 'false'
+''' + query, type='presto')
 
     def test_ok(self):
         read_td_query('select 1', self.engine)
