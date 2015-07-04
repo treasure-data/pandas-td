@@ -319,12 +319,19 @@ def connect(apikey=None, endpoint=None, **kwargs):
     return Connection(apikey, endpoint, **kwargs)
 
 def create_engine(url, con=None, header=True, show_progress=5.0):
-    '''Create a handler for query engines based on a URL.
+    '''Create a handler for query engine based on a URL.
+
+    The following environment variables are used for default connection:
+
+      TD_API_KEY     API key
+      TD_API_SERVER  API server (default: api.treasuredata.com)
+      HTTP_PROXY     HTTP proxy (optional)
 
     Parameters
     ----------
     url : string
-        Engine descriptor in the form "type://apikey@endpoint/database?params..."
+        Engine descriptor in the form "type://apikey@host/database?params..."
+        Use shorthand notation "type:database?params..." for the default connection.
     con : Connection, optional
         Handler returned by connect. If not given, default connection is used.
     header : string or boolean, default True
@@ -337,21 +344,6 @@ def create_engine(url, con=None, header=True, show_progress=5.0):
     Returns
     -------
     QueryEngine
-
-    Examples
-    --------
-    # presto
-    engine = create_engine('presto://APIKEY@api.treasuredata.com/DATABASE')
-
-    # hive
-    engine = create_engine('hive://APIKEY@api.treasuredata.com/DATABASE')
-
-    # use default connection
-    engine = create_engine('presto:DATABASE')
-
-    # use specific connection
-    con = connect(apikey='APIKEY', endpoint='https://api.treasuredata.com/')
-    engine = create_engine('presto:DATABASE', con=con)
     '''
     url = urlparse(url)
     engine_type = url.scheme if url.scheme else 'presto'
@@ -362,7 +354,7 @@ def create_engine(url, con=None, header=True, show_progress=5.0):
             con = Connection(apikey=apikey, endpoint="https://{0}/".format(host))
         else:
             # default connection
-            con = connect()
+            con = Connection()
     database = url.path[1:] if url.path.startswith('/') else url.path
     params = {
         'type': engine_type,

@@ -32,12 +32,10 @@ $ ipython notebook
 ## Examples
 
 ```python
-import os
 import pandas_td as td
 
-# Initialize connection
-con = td.connect(apikey=os.environ['TD_API_KEY'], endpoint='https://api.treasuredata.com/')
-engine = con.query_engine(database='sample_datasets', type='presto')
+# Initialize query engine
+engine = td.create_engine('presto:sample_datasets')
 
 # Read Treasure Data query into a DataFrame.
 df = td.read_td('select * from www_access', engine)
@@ -46,6 +44,7 @@ df = td.read_td('select * from www_access', engine)
 df = td.read_td_table('nasdaq', engine, sample=0.05, limit=10000)
 
 # Write a DataFrame to a Treasure Data table.
+con = engine.connection
 td.to_td(df, 'my_db.test_table', con, if_exists='replace', index=False)
 ```
 
