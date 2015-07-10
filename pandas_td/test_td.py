@@ -57,11 +57,8 @@ class MockJob(object):
     def url(self):
         return 'https://mock/jobs/1'
 
-    def finished(self):
-        return True
-
-    def update(self):
-        return True
+    def wait(self, **kwargs):
+        pass
 
     def status(self):
         return self._status

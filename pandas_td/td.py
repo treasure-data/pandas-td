@@ -167,17 +167,9 @@ class QueryEngine(object):
         IPython.display.clear_output(True)
         IPython.display.display(IPython.display.HTML(html))
 
-    def wait(self, job):
-        try:
-            while not job.finished():
-                time.sleep(2)
-                job.update()
-                self._display_progress(job)
-            job.update()
-            self._display_progress(job)
-        except KeyboardInterrupt:
-            job.kill()
-            raise
+    def wait_callback(self, job):
+        job.update()
+        self._display_progress(job)
 
     def execute(self, query, **kwargs):
         # parameters
@@ -188,7 +180,11 @@ class QueryEngine(object):
         issued_at = datetime.datetime.utcnow().replace(microsecond=0)
         job = self.connection.client.query(self.database, query, **params)
         job.issued_at = issued_at
-        self.wait(job)
+        try:
+            job.wait(wait_interval=2, wait_callback=self.wait_callback)
+        except KeyboardInterrupt:
+            job.kill()
+            raise
 
         # status check
         if not job.success():

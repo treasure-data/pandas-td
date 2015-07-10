@@ -2,4 +2,4 @@ certifi
 six>=1.9.0
 pandas>=0.16.0
 requests>=2.7.0
-td-client>=0.2.0
+td-client>=0.3.1
