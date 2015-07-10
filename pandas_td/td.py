@@ -192,8 +192,8 @@ class QueryEngine(object):
 
         # status check
         if not job.success():
-            if job.debug and job.debug['stderr'] and job.debug['cmdout']:
-                logger.error("%s\nOutput:\n%s", job.debug['stderr'], job.debug['cmdout'])
+            if job.debug and job.debug['stderr']:
+                logger.error(job.debug['stderr'])
             raise RuntimeError("job {0} {1}".format(job.job_id, job.status()))
 
         # result
