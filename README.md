@@ -48,9 +48,23 @@ con = engine.connection
 td.to_td(df, 'my_db.test_table', con, if_exists='replace', index=False)
 ```
 
+Magic functions (experimental):
+
+```python
+%load_ext pandas_td.ipython
+
+# Use database
+%td_use sample_datasets
+
+# Run query
+%%td_presto
+select * from www_access
+```
+
 ## Documentation
 
 - Tutorial (https://github.com/treasure-data/pandas-td/blob/master/doc/tutorial.ipynb)
+- Magic functions (https://github.com/treasure-data/pandas-td/blob/master/doc/magic.ipynb)
 
 ## License
 

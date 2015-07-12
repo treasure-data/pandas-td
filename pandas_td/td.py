@@ -64,6 +64,7 @@ class Connection(object):
         return self.client.api.endpoint
 
     def databases(self):
+        warnings.warn("'databases' is deprecated. Use magic function instead.", DeprecationWarning)
         databases = self.client.databases()
         if databases:
             return pd.DataFrame(
@@ -73,6 +74,7 @@ class Connection(object):
             return pd.DataFrame()
 
     def tables(self, database):
+        warnings.warn("'tables' is deprecated. Use magic function instead.", DeprecationWarning)
         tables = self.client.tables(database)
         if tables:
             return pd.DataFrame(
