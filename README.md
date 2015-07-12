@@ -44,7 +44,7 @@ df = td.read_td('select * from www_access', engine)
 df = td.read_td_table('nasdaq', engine, sample=0.05, limit=10000)
 
 # Write a DataFrame to a Treasure Data table.
-con = engine.connection
+con = td.connect()
 td.to_td(df, 'my_db.test_table', con, if_exists='replace', index=False)
 ```
 
