@@ -262,18 +262,13 @@ class ResultProxy(object):
                     frame[name] = pd.to_datetime(frame[name], unit=parse_dates[name])
         return frame
 
-    def _index_col(self, frame, index_col):
-        frame.index = frame[index_col]
-        frame.drop(index_col, axis=1, inplace=True)
-        return frame
-
     def to_dataframe(self, index_col=None, parse_dates=None):
         columns = [c[0] for c in self.description]
         frame = pd.DataFrame(iter(self), columns=columns)
         if parse_dates is not None:
             frame = self._parse_dates(frame, parse_dates)
         if index_col is not None:
-            frame = self._index_col(frame, index_col)
+            frame.set_index(index_col, inplace=True)
         return frame
 
 class StreamingUploader(object):
