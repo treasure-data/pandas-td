@@ -1,5 +1,10 @@
 # Version History
 
+## 0.8.1 (2015-07-18)
+
+* Add options for ``%%td_hive``, ``%%td_pig``, and ``%%td_presto``.
+* ``%%td_hive_plot``, ``%%td_pig_plot``, and ``%%td_presto_plot`` are deprecated.  Use ``--plot`` options instead.
+
 ## 0.8.0 (2015-07-13)
 
 * New function ``create_engine``.

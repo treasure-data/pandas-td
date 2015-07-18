@@ -1,10 +1,13 @@
 # ipython.py
 
+import argparse
 import re
 import sys
+import numpy as np
 import pandas as pd
 import pandas_td as td
 import tdclient
+import IPython
 
 MAGIC_CONTEXT_NAME = '_td_magic'
 
@@ -78,47 +81,132 @@ def magic_use(line):
     # push table names
     get_ipython().push({t.name: MagicTable(t) for t in tables})
 
-def magic_query(line, cell, engine_type):
-    ctx = get_td_magic_context()
-    con = ctx.connect()
-    if line:
-        database = line
-    else:
-        database = ctx.database
-    engine = td.create_engine('{0}:{1}'.format(engine_type, database), con=con)
-    return td.read_td_query(cell, engine)
+class MagicQuery(object):
+    def __init__(self, engine_type):
+        self.type = engine_type
+        self.parser = self._argument_parser()
 
-def magic_query_plot(line, cell, engine_type):
-    df = magic_query(line, cell, engine_type)
-    # convert 'time' to time-series index
-    if 'time' in df.columns:
-        df['time'] = pd.to_datetime(df['time'], unit='s')
-        df.set_index('time', inplace=True)
-    return df.plot()
+    def _argument_parser(self):
+        parser = argparse.ArgumentParser(
+            prog = self.type,
+            description = 'Cell magic to run a query.',
+            add_help = False)
+        parser.add_argument('database', nargs='?',
+                            help='database name')
+        parser.add_argument('--pivot', action='store_true',
+                            help='run pivot_table against dimensions')
+        parser.add_argument('--plot', action='store_true',
+                            help='plot the query result')
+        parser.add_argument('-v', '--verbose', action='store_true',
+                            help='verbose output')
+        parser.add_argument('-o', '--out',
+                            help='store the result to a variable')
+        parser.add_argument('-q', '--quiet', action='store_true',
+                            help='disable progress output')
+        return parser
+
+    def create_engine(self, ctx, args, code):
+        name = '{0}:{1}'.format(self.type, args.database)
+        if args.quiet:
+            show_progress = False
+            code.append("_e = td.create_engine({0}, show_progress={1})\n".format(repr(name), show_progress))
+        else:
+            show_progress = True
+            code.append("_e = td.create_engine({0})\n".format(repr(name)))
+        return td.create_engine(name, con=ctx.connect(), show_progress=show_progress)
+
+    def pivot_table(self, d, ctx, args, code):
+        index = d.columns[0]
+        dimension = [c for c, t in zip(d.columns[1:], d.dtypes[1:]) if t == np.dtype('O')]
+        measure = [c for c, t in zip(d.columns[1:], d.dtypes[1:]) if t != np.dtype('O')]
+        if len(dimension) == 0:
+            code.append("_d.set_index({0}, inplace=True)\n".format(repr(index)))
+            d.set_index(index, inplace=True)
+            return d
+        if len(dimension) == 1:
+            dimension = dimension[0]
+        if len(measure) == 1:
+            measure = measure[0]
+        code.append("_d = _d.pivot_table({0}, {1}, {2})\n".format(repr(measure), repr(index), repr(dimension)))
+        return d.pivot_table(measure, index, dimension)
+
+    def __call__(self, line, cell):
+        try:
+            args = self.parser.parse_args(line.split())
+        except SystemExit:
+            return
+
+        # implicit options
+        if args.plot:
+            args.pivot = True
+
+        # context
+        ctx = get_td_magic_context()
+        if args.database is None:
+            args.database = ctx.database
+
+        code = []
+        code.append("# translated code\n")
+        code.append("_q = &lt;magic.cell&gt;\n")
+
+        # create_engine
+        engine = self.create_engine(ctx, args, code)
+
+        # read_td_query
+        code.append("_d = td.read_td_query(_q, _e)\n")
+        d = td.read_td_query(cell, engine)
+
+        # convert 'time' to datetime
+        if 'time' in d.columns:
+            if d['time'].dtype == np.dtype('O'):
+                code.append("_d['time'] = pd.to_datetime(_d['time'])\n")
+                d['time'] = pd.to_datetime(d['time'])
+            else:
+                code.append("_d['time'] = pd.to_datetime(_d['time'], unit='s')\n")
+                d['time'] = pd.to_datetime(d['time'], unit='s')
+
+        # pivot_table
+        if args.pivot:
+            d = self.pivot_table(d, ctx, args, code)
+        elif 'time' in d.columns:
+            code.append("_d.set_index('time', inplace=True)\n")
+            d.set_index('time', inplace=True)
+
+        # return value
+        r = d
+        if args.out:
+            code.append("{0} = _d\n".format(args.out))
+            get_ipython().push({args.out: d})
+            r = None
+        if args.plot:
+            code.append("_d.plot()\n")
+            r = d.plot()
+        else:
+            code.append("_d\n")
+
+        # output
+        if args.verbose:
+            html = '<pre style="background-color: #ffe;">' + ''.join(code) + '</pre>\n'
+            IPython.display.display(IPython.display.HTML(html))
+        else:
+            IPython.display.clear_output()
+        return r
 
 # extension
 
 def load_ipython_extension(ipython):
     ipython.push('get_td_magic_context')
 
-    # %td_databases [PATTERN]
-    ipython.register_magic_function(magic_databases, magic_kind='line', magic_name='td_databases')
+    # line magic
+    LINE_MAGICS = {
+        'td_databases': magic_databases,
+        'td_tables': magic_tables,
+        'td_jobs': magic_jobs,
+        'td_use': magic_use,
+    }
+    for name, func in LINE_MAGICS.items():
+        ipython.register_magic_function(func, magic_kind='line', magic_name=name)
 
-    # %td_tables [PATTERN]
-    ipython.register_magic_function(magic_tables, magic_kind='line', magic_name='td_tables')
-
-    # %td_jobs
-    ipython.register_magic_function(magic_jobs, magic_kind='line', magic_name='td_jobs')
-
-    # %td_use database
-    ipython.register_magic_function(magic_use, magic_kind='line', magic_name='td_use')
-
-    # %%td_hive, %%td_pig, %%td_presto
-    # %%td_hive_plot, %%td_pig_plot, %%td_presto_plot
+    # cell magic
     for name in ['hive', 'pig', 'presto']:
-        def query(line, cell):
-            return magic_query(line, cell, name)
-        def query_plot(line, cell):
-            return magic_query_plot(line, cell, name)
-        ipython.register_magic_function(query, magic_kind='cell', magic_name='td_' + name)
-        ipython.register_magic_function(query_plot, magic_kind='cell', magic_name='td_' + name + '_plot')
+        ipython.register_magic_function(MagicQuery(name), magic_kind='cell', magic_name='td_' + name)
