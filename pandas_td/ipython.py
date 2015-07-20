@@ -22,7 +22,7 @@ class MagicTable(object):
     def __init__(self, table):
         print("INFO: import {0}".format(table.name))
         self.table = table
-        data = [c if len(c) == 3 else (c[0], c[1], '') for c in table.schema]
+        data = [c if len(c) == 3 else [c[0], c[1], ''] for c in table.schema]
         self.columns = [c[2] if c[2] else c[0] for c in data]
         self.frame = pd.DataFrame(data, columns=['field', 'type', 'alias'])
 
