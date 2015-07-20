@@ -1,5 +1,9 @@
 # Version History
 
+## 0.8.2 (2015-07-20)
+
+* Minor bug fixes.
+
 ## 0.8.1 (2015-07-18)
 
 * Add options for ``%%td_hive``, ``%%td_pig``, and ``%%td_presto``.
