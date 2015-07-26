@@ -108,12 +108,14 @@ class MagicQuery(object):
     def create_engine(self, ctx, args, code):
         name = '{0}:{1}'.format(self.type, args.database)
         if args.quiet:
-            show_progress = False
-            code.append("_e = td.create_engine({0}, show_progress={1})\n".format(repr(name), show_progress))
+            params = {'show_progress': False}
+        elif args.verbose:
+            params = {'show_progress': True, 'clear_progress': False}
         else:
-            show_progress = True
-            code.append("_e = td.create_engine({0})\n".format(repr(name)))
-        return td.create_engine(name, con=ctx.connect(), show_progress=show_progress)
+            params = {}
+        args = [repr(name)] + ['{0}={1}'.format(k, v) for k, v in params.items()]
+        code.append("_e = td.create_engine({0})\n".format(', '.join(args)))
+        return td.create_engine(name, con=ctx.connect(), **params)
 
     def pivot_table(self, d, ctx, args, code):
         index = d.columns[0]
@@ -147,14 +149,19 @@ class MagicQuery(object):
 
         code = []
         code.append("# translated code\n")
-        code.append("_q = &lt;magic.cell&gt;\n")
+
+        # build query
+        query = cell.format(**get_ipython().user_ns)
+        code.append("_q = '''\n")
+        code.append(query)
+        code.append("\n'''\n")
 
         # create_engine
         engine = self.create_engine(ctx, args, code)
 
         # read_td_query
         code.append("_d = td.read_td_query(_q, _e)\n")
-        d = td.read_td_query(cell, engine)
+        d = td.read_td_query(query, engine)
 
         # convert 'time' to datetime
         if 'time' in d.columns:
@@ -188,8 +195,6 @@ class MagicQuery(object):
         if args.verbose:
             html = '<pre style="background-color: #ffe;">' + ''.join(code) + '</pre>\n'
             IPython.display.display(IPython.display.HTML(html))
-        else:
-            IPython.display.clear_output()
         return r
 
 # extension
