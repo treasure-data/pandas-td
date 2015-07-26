@@ -1,6 +1,6 @@
 # Version History
 
-## 0.8.3 (TBD)
+## 0.8.3 (2015-07-27)
 
 * Add 'clear_progress' parameter to create_engine.
 * Magic query functions now substitute variables into query text.
