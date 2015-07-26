@@ -88,7 +88,7 @@ class Connection(object):
         return QueryEngine(self, database, kwargs, header=True, show_progress=5)
 
 class QueryEngine(object):
-    def __init__(self, connection, database, params=None, header=False, show_progress=False, clear_progress=True):
+    def __init__(self, connection, database, params=None, header=False, show_progress=False, clear_progress=False):
         self.connection = connection
         self.database = database
         self._params = {} if params is None else params
@@ -96,9 +96,10 @@ class QueryEngine(object):
         if IPython and not sys.stdout.isatty():
             # Enable progress for IPython notebook
             self.show_progress = show_progress
+            self.clear_progress = clear_progress
         else:
             self.show_progress = False
-        self.clear_progress = clear_progress
+            self.clear_progress = False
 
     @property
     def type(self):
