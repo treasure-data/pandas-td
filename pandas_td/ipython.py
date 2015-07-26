@@ -97,6 +97,8 @@ class MagicQuery(object):
                             help='run pivot_table against dimensions')
         parser.add_argument('--plot', action='store_true',
                             help='plot the query result')
+        parser.add_argument('-n', '--dry-run', action='store_true',
+                            help='output translated code without running query')
         parser.add_argument('-v', '--verbose', action='store_true',
                             help='verbose output')
         parser.add_argument('-o', '--out',
@@ -161,6 +163,10 @@ class MagicQuery(object):
 
         # read_td_query
         code.append("_d = td.read_td_query(_q, _e)\n")
+        if args.dry_run:
+            html = '<pre style="background-color: #ffe;">' + ''.join(code) + '</pre>\n'
+            IPython.display.display(IPython.display.HTML(html))
+            return
         d = td.read_td_query(query, engine)
 
         # convert 'time' to datetime
