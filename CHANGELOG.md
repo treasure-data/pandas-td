@@ -1,5 +1,9 @@
 # Version History
 
+## 0.8.3 (TBD)
+
+* Add 'clear_progress' parameter to create_engine.
+
 ## 0.8.2 (2015-07-20)
 
 * Minor bug fixes.

@@ -88,7 +88,7 @@ class Connection(object):
         return QueryEngine(self, database, kwargs, header=True, show_progress=5)
 
 class QueryEngine(object):
-    def __init__(self, connection, database, params=None, header=False, show_progress=False):
+    def __init__(self, connection, database, params=None, header=False, show_progress=False, clear_progress=True):
         self.connection = connection
         self.database = database
         self._params = {} if params is None else params
@@ -98,6 +98,7 @@ class QueryEngine(object):
             self.show_progress = show_progress
         else:
             self.show_progress = False
+        self.clear_progress = clear_progress
 
     @property
     def type(self):
@@ -222,6 +223,8 @@ class QueryEngine(object):
                 curval += len(chunk)
                 self._display_progress(job, curval)
                 yield d.decompress(chunk)
+        if self.clear_progress:
+            IPython.display.clear_output()
 
 class ResultProxy(object):
     def __init__(self, engine, job):
@@ -311,7 +314,7 @@ class StreamingUploader(object):
 def connect(apikey=None, endpoint=None, **kwargs):
     return Connection(apikey, endpoint, **kwargs)
 
-def create_engine(url, con=None, header=True, show_progress=5.0):
+def create_engine(url, con=None, header=True, show_progress=5.0, clear_progress=True):
     '''Create a handler for query engine based on a URL.
 
     The following environment variables are used for default connection:
@@ -333,6 +336,8 @@ def create_engine(url, con=None, header=True, show_progress=5.0):
     show_progress : double or boolean, default 5.0
         Number of seconds to wait before printing progress.
         Set False to disable progress entirely.
+    clear_progress : boolean, default True
+        If True, clear progress when query completed.
 
     Returns
     -------
@@ -353,7 +358,10 @@ def create_engine(url, con=None, header=True, show_progress=5.0):
         'type': engine_type,
     }
     params.update(parse_qsl(url.query))
-    return QueryEngine(con, database, params, header=header, show_progress=show_progress)
+    return QueryEngine(con, database, params,
+                       header=header,
+                       show_progress=show_progress,
+                       clear_progress=clear_progress)
 
 def read_td_query(query, engine, index_col=None, parse_dates=None, distributed_join=False, params=None):
     '''Read Treasure Data query into a DataFrame.
