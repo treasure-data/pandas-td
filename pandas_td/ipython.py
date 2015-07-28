@@ -120,9 +120,11 @@ class MagicQuery(object):
         return td.create_engine(name, con=ctx.connect(), **params)
 
     def pivot_table(self, d, ctx, args, code):
+        def is_dimension(c, t):
+            return c.endswith('_id') or t == np.dtype('O')
         index = d.columns[0]
-        dimension = [c for c, t in zip(d.columns[1:], d.dtypes[1:]) if t == np.dtype('O')]
-        measure = [c for c, t in zip(d.columns[1:], d.dtypes[1:]) if t != np.dtype('O')]
+        dimension = [c for c, t in zip(d.columns[1:], d.dtypes[1:]) if is_dimension(c, t)]
+        measure = [c for c, t in zip(d.columns[1:], d.dtypes[1:]) if not is_dimension(c, t)]
         if len(dimension) == 0:
             code.append("_d.set_index({0}, inplace=True)\n".format(repr(index)))
             d.set_index(index, inplace=True)
