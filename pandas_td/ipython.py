@@ -7,7 +7,9 @@ import numpy as np
 import pandas as pd
 import pandas_td as td
 import tdclient
+
 import IPython
+from IPython.core import magic
 
 MAGIC_CONTEXT_NAME = '_td_magic'
 
@@ -41,54 +43,64 @@ def get_td_magic_context():
         ipython.push({MAGIC_CONTEXT_NAME: ctx})
     return ctx
 
-def magic_databases(pattern):
-    ctx = get_td_magic_context()
-    con = ctx.connect()
-    columns = ['name', 'count', 'permission', 'created_at', 'updated_at']
-    values = [[getattr(db, c) for c in columns]
-              for db in con.client.databases()
-              if re.search(pattern, db.name)]
-    return pd.DataFrame(values, columns=columns)
+class TDMagics(magic.Magics):
+    def __init__(self, shell):
+        super(TDMagics, self).__init__(shell)
+        self.context = get_td_magic_context()
 
-def magic_tables(pattern):
-    ctx = get_td_magic_context()
-    con = ctx.connect()
-    columns = ['db_name', 'name', 'count', 'estimated_storage_size', 'last_log_timestamp', 'created_at']
-    values = [[getattr(t, c) for c in columns]
-              for db in con.client.databases()
-              for t in con.client.tables(db.name)
-              if re.search(pattern, t.identifier)]
-    return pd.DataFrame(values, columns=columns)
+@magic.magics_class
+class DatabasesMagics(TDMagics):
+    @magic.line_magic
+    def td_databases(self, pattern):
+        con = self.context.connect()
+        columns = ['name', 'count', 'permission', 'created_at', 'updated_at']
+        values = [[getattr(db, c) for c in columns]
+                  for db in con.client.databases()
+                  if re.search(pattern, db.name)]
+        return pd.DataFrame(values, columns=columns)
 
-def magic_jobs(pattern):
-    ctx = get_td_magic_context()
-    con = ctx.connect()
-    columns = ['status', 'job_id', 'type', 'start_at', 'query']
-    values = [[j.status(), j.job_id, j.type, j._start_at, j.query]
-              for j in con.client.jobs()]
-    return pd.DataFrame(values, columns=columns)
+@magic.magics_class
+class TablesMagics(TDMagics):
+    @magic.line_magic
+    def td_tables(self, pattern):
+        con = self.context.connect()
+        columns = ['db_name', 'name', 'count', 'estimated_storage_size', 'last_log_timestamp', 'created_at']
+        values = [[getattr(t, c) for c in columns]
+                  for db in con.client.databases()
+                  for t in con.client.tables(db.name)
+                  if re.search(pattern, t.identifier)]
+        return pd.DataFrame(values, columns=columns)
 
-def magic_use(line):
-    ctx = get_td_magic_context()
-    con = ctx.connect()
-    try:
-        tables = con.client.tables(line)
-    except tdclient.api.NotFoundError:
-        sys.stderr.write("ERROR: Database '{0}' not found.".format(line))
-        return
-    # update context
-    ctx.database = line
-    # push table names
-    get_ipython().push({t.name: MagicTable(t) for t in tables})
+@magic.magics_class
+class JobsMagics(TDMagics):
+    @magic.line_magic
+    def td_jobs(self, pattern):
+        con = self.context.connect()
+        columns = ['status', 'job_id', 'type', 'start_at', 'query']
+        values = [[j.status(), j.job_id, j.type, j._start_at, j.query]
+                  for j in con.client.jobs()]
+        return pd.DataFrame(values, columns=columns)
 
-class MagicQuery(object):
-    def __init__(self, engine_type):
-        self.type = engine_type
-        self.parser = self._argument_parser()
+@magic.magics_class
+class UseMagics(TDMagics):
+    @magic.line_magic
+    def td_use(self, line):
+        con = self.context.connect()
+        try:
+            tables = con.client.tables(line)
+        except tdclient.api.NotFoundError:
+            sys.stderr.write("ERROR: Database '{0}' not found.".format(line))
+            return
+        # update context
+        self.context.database = line
+        # push table names
+        get_ipython().push({t.name: MagicTable(t) for t in tables})
 
-    def _argument_parser(self):
+@magic.magics_class
+class QueryMagics(TDMagics):
+    def create_parser(self, engine_type):
         parser = argparse.ArgumentParser(
-            prog = self.type,
+            prog = engine_type,
             description = 'Cell magic to run a query.',
             add_help = False)
         parser.add_argument('database', nargs='?',
@@ -107,8 +119,8 @@ class MagicQuery(object):
                             help='disable progress output')
         return parser
 
-    def create_engine(self, ctx, args, code):
-        name = '{0}:{1}'.format(self.type, args.database)
+    def create_engine(self, engine_type, args, code):
+        name = '{0}:{1}'.format(engine_type, args.database)
         if args.quiet:
             params = {'show_progress': False}
         elif args.verbose:
@@ -117,9 +129,9 @@ class MagicQuery(object):
             params = {}
         args = [repr(name)] + ['{0}={1}'.format(k, v) for k, v in params.items()]
         code.append("_e = td.create_engine({0})\n".format(', '.join(args)))
-        return td.create_engine(name, con=ctx.connect(), **params)
+        return td.create_engine(name, con=self.context.connect(), **params)
 
-    def pivot_table(self, d, ctx, args, code):
+    def pivot_table(self, d, args, code):
         def is_dimension(c, t):
             return c.endswith('_id') or t == np.dtype('O')
         index = d.columns[0]
@@ -136,9 +148,10 @@ class MagicQuery(object):
         code.append("_d = _d.pivot_table({0}, {1}, {2})\n".format(repr(measure), repr(index), repr(dimension)))
         return d.pivot_table(measure, index, dimension)
 
-    def __call__(self, line, cell):
+    def run_query(self, engine_type, line, cell):
+        parser = self.create_parser(engine_type)
         try:
-            args = self.parser.parse_args(line.split())
+            args = parser.parse_args(line.split())
         except SystemExit:
             return
 
@@ -147,9 +160,8 @@ class MagicQuery(object):
             args.pivot = True
 
         # context
-        ctx = get_td_magic_context()
         if args.database is None:
-            args.database = ctx.database
+            args.database = self.context.database
 
         code = []
         code.append("# translated code\n")
@@ -161,7 +173,7 @@ class MagicQuery(object):
         code.append("\n'''\n")
 
         # create_engine
-        engine = self.create_engine(ctx, args, code)
+        engine = self.create_engine(engine_type, args, code)
 
         # read_td_query
         code.append("_d = td.read_td_query(_q, _e)\n")
@@ -182,7 +194,7 @@ class MagicQuery(object):
 
         # pivot_table
         if args.pivot:
-            d = self.pivot_table(d, ctx, args, code)
+            d = self.pivot_table(d, args, code)
         elif 'time' in d.columns:
             code.append("_d.set_index('time', inplace=True)\n")
             d.set_index('time', inplace=True)
@@ -205,21 +217,24 @@ class MagicQuery(object):
             IPython.display.display(IPython.display.HTML(html))
         return r
 
+    @magic.cell_magic
+    def td_hive(self, line, cell):
+        return self.run_query('hive', line, cell)
+
+    @magic.cell_magic
+    def td_pig(self, line, cell):
+        return self.run_query('pig', line, cell)
+
+    @magic.cell_magic
+    def td_presto(self, line, cell):
+        return self.run_query('presto', line, cell)
+
 # extension
 
 def load_ipython_extension(ipython):
     ipython.push('get_td_magic_context')
-
-    # line magic
-    LINE_MAGICS = {
-        'td_databases': magic_databases,
-        'td_tables': magic_tables,
-        'td_jobs': magic_jobs,
-        'td_use': magic_use,
-    }
-    for name, func in LINE_MAGICS.items():
-        ipython.register_magic_function(func, magic_kind='line', magic_name=name)
-
-    # cell magic
-    for name in ['hive', 'pig', 'presto']:
-        ipython.register_magic_function(MagicQuery(name), magic_kind='cell', magic_name='td_' + name)
+    ipython.register_magics(DatabasesMagics)
+    ipython.register_magics(TablesMagics)
+    ipython.register_magics(JobsMagics)
+    ipython.register_magics(UseMagics)
+    ipython.register_magics(QueryMagics)
