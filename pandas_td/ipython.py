@@ -134,7 +134,7 @@ class QueryMagics(TDMagics):
         code.append("_e = td.create_engine({0})\n".format(', '.join(args)))
         return td.create_engine(name, con=self.context.connect(), **params)
 
-    def pivot_table(self, d, args, code):
+    def pivot_table(self, d, code):
         def is_dimension(c, t):
             return c.endswith('_id') or t == np.dtype('O')
         index = d.columns[0]
@@ -197,7 +197,7 @@ class QueryMagics(TDMagics):
 
         # pivot_table
         if args.pivot:
-            d = self.pivot_table(d, args, code)
+            d = self.pivot_table(d, code)
         elif 'time' in d.columns:
             code.append("_d.set_index('time', inplace=True)\n")
             d.set_index('time', inplace=True)

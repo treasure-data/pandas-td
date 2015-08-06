@@ -2,7 +2,6 @@ import contextlib
 import datetime
 import gzip
 import io
-import os
 import re
 import sys
 import time
