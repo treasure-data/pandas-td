@@ -1,6 +1,7 @@
 # ipython.py
 
 import argparse
+import os
 import re
 import sys
 import numpy as np
@@ -114,7 +115,9 @@ class QueryMagics(TDMagics):
         parser.add_argument('-v', '--verbose', action='store_true',
                             help='verbose output')
         parser.add_argument('-o', '--out',
-                            help='store the result to a variable')
+                            help='store the result to variable')
+        parser.add_argument('-O', '--out-file',
+                            help='store the result to file')
         parser.add_argument('-q', '--quiet', action='store_true',
                             help='disable progress output')
         return parser
@@ -205,10 +208,23 @@ class QueryMagics(TDMagics):
             code.append("{0} = _d\n".format(args.out))
             get_ipython().push({args.out: d})
             r = None
+        if args.out_file:
+            if args.out_file[0] in ["'", '"']:
+                path = os.path.expanduser(get_ipython().ev(args.out_file))
+            else:
+                path = os.path.expanduser(args.out_file)
+            if d.index.name:
+                code.append("_d.to_csv({0})\n".format(repr(path)))
+                d.to_csv(path)
+            else:
+                code.append("_d.to_csv({0}, index=False)\n".format(repr(path)))
+                d.to_csv(path, index=False)
+            print("INFO: saved to '{0}'".format(path))
+            r = None
         if args.plot:
             code.append("_d.plot()\n")
             r = d.plot()
-        else:
+        elif r is not None:
             code.append("_d\n")
 
         # output
