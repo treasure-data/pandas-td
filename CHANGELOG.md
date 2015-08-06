@@ -1,5 +1,10 @@
 # Version History
 
+## 0.8.4 (2015-08-07)
+
+* New option --out-file (-O) for magic query functions.
+* Magic query functions --plot and --pivot options regard "_id" as dimensions.
+
 ## 0.8.3 (2015-07-27)
 
 * Add 'clear_progress' parameter to create_engine.
