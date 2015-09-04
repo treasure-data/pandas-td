@@ -15,7 +15,7 @@ You can install the releases from [PyPI](https://pypi.python.org/):
 $ pip install pandas-td
 ```
 
-For Mac OS X users, you can install [Pandas](http://pandas.pydata.org/) and [Jupyter](https://jupyter.org/) as follows:
+On Mac OS X, you can install [Pandas](http://pandas.pydata.org/) and [Jupyter](https://jupyter.org/) as follows:
 
 ```sh
 # Use Homebrew to install Python 3.x
@@ -51,14 +51,14 @@ td.to_td(df, 'my_db.test_table', con, if_exists='replace', index=False)
 Magic functions (experimental):
 
 ```python
-%load_ext pandas_td.ipython
+In [1]: %%load_ext pandas_td.ipython
 
 # Use database
-%td_use sample_datasets
+In [2]: %td_use sample_datasets
 
 # Run query
-%%td_presto
-select * from www_access
+In [3]: %%td_presto
+   ...: select * from www_access
 ```
 
 ## Documentation
