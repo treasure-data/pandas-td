@@ -388,6 +388,10 @@ def read_td_query(query, engine, index_col=None, parse_dates=None, distributed_j
         See https://prestodb.io/docs/current/release/release-0.77.html
     params : dict, optional
         Parameters to pass to execute method.
+        Available parameters:
+        - result_url (str): result output URL
+        - priority (int or str): priority (e.g. "NORMAL", "HIGH", etc.)
+        - retry_limit (int): retry limit
 
     Returns
     -------
