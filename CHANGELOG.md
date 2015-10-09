@@ -1,5 +1,9 @@
 # Version History
 
+## 0.8.5 (2015-10-09)
+
+* New function ``read_td_job``.
+
 ## 0.8.4 (2015-08-07)
 
 * New option --out-file (-O) for magic query functions.
