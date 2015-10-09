@@ -174,20 +174,10 @@ class QueryEngine(object):
         job.update()
         self._display_progress(job)
 
-    def execute(self, query, **kwargs):
-        # parameters
-        params = self._params.copy()
-        params.update(kwargs)
-
-        # issue query
-        issued_at = datetime.datetime.utcnow().replace(microsecond=0)
-        job = self.connection.client.query(self.database, query, **params)
-        job.issued_at = issued_at
-        try:
+    def get_result(self, job, wait=True):
+        # wait for completion
+        if wait:
             job.wait(wait_interval=2, wait_callback=self.wait_callback)
-        except KeyboardInterrupt:
-            job.kill()
-            raise
 
         # status check
         if not job.success():
@@ -197,6 +187,22 @@ class QueryEngine(object):
 
         # result
         return ResultProxy(self, job)
+
+    def execute(self, query, **kwargs):
+        # parameters
+        params = self._params.copy()
+        params.update(kwargs)
+
+        # issue query
+        issued_at = datetime.datetime.utcnow().replace(microsecond=0)
+        job = self.connection.client.query(self.database, query, **params)
+        job.issued_at = issued_at
+
+        try:
+            return self.get_result(job, wait=True)
+        except KeyboardInterrupt:
+            job.kill()
+            raise
 
     def _http_get(self, uri, **kwargs):
         return requests.get(uri, **kwargs)
@@ -405,6 +411,38 @@ def read_td_query(query, engine, index_col=None, parse_dates=None, distributed_j
         header += "-- set session distributed_join = '{0}'\n".format('true' if distributed_join else 'false')
     # execute
     r = engine.execute(header + query, **params)
+    return r.to_dataframe(index_col=index_col, parse_dates=parse_dates)
+
+def read_td_job(job_id, engine, index_col=None, parse_dates=None):
+    '''Read Treasure Data job result into a DataFrame.
+
+    Returns a DataFrame corresponding to the result set of the job.
+    This method waits for job completion if the specified job is still running.
+    Optionally provide an index_col parameter to use one of the columns as
+    the index, otherwise default integer index will be used.
+
+    Parameters
+    ----------
+    job_id : integer
+        Job ID.
+    engine : QueryEngine
+        Handler returned by create_engine.
+    index_col : string, optional
+        Column name to use as index for the returned DataFrame object.
+    parse_dates : list or dict, optional
+        - List of column names to parse as dates
+        - Dict of {column_name: format string} where format string is strftime
+          compatible in case of parsing string times or is one of (D, s, ns, ms, us)
+          in case of parsing integer timestamps
+
+    Returns
+    -------
+    DataFrame
+    '''
+    # get job
+    job = engine.connection.client.job(job_id)
+    # result
+    r = engine.get_result(job, wait=True)
     return r.to_dataframe(index_col=index_col, parse_dates=parse_dates)
 
 def read_td_table(table_name, engine, index_col=None, parse_dates=None, columns=None, time_range=None, sample=None, limit=10000):

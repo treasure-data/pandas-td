@@ -9,6 +9,7 @@ from .td import _convert_date_format
 from pandas_td import connect
 from pandas_td import read_td
 from pandas_td import read_td_query
+from pandas_td import read_td_job
 from pandas_td import read_td_table
 from pandas_td import to_td
 
@@ -281,6 +282,18 @@ class ReadTdQueryTestCase(TestCase):
     def test_ok(self):
         read_td_query('select 1', self.engine)
         self.assert_query('select 1')
+
+class ReadTdJobTestCase(TestCase):
+    def setUp(self):
+        self.job = MockJob()
+        self.connection = connect('test-key', 'test-endpoint')
+        self.connection.client.job = MagicMock(return_value=self.job)
+        self.engine = self.connection.query_engine('test_db', type='presto')
+        self.engine._http_get = MagicMock(return_value=MockRequest(self.job))
+
+    def test_ok(self):
+        df = read_td_job(1, self.engine)
+        eq_(len(df), len(self.job.result))
 
 class ReadTdTableTestCase(TestCase):
     def setUp(self):
