@@ -7,6 +7,11 @@
 
 [![Pandas-TD](http://i.gyazo.com/454b1dcbcea79843053ed5d8be50e75b.png)](https://github.com/treasure-data/pandas-td/blob/master/doc/tutorial.ipynb)
 
+## Documentation
+
+- Tutorial (https://github.com/treasure-data/pandas-td/blob/master/doc/tutorial.ipynb)
+- Magic functions (https://github.com/treasure-data/pandas-td/blob/master/doc/magic.ipynb)
+
 ## Install
 
 You can install the releases from [PyPI](https://pypi.python.org/):
@@ -60,11 +65,6 @@ In [2]: %td_use sample_datasets
 In [3]: %%td_presto
    ...: select * from www_access
 ```
-
-## Documentation
-
-- Tutorial (https://github.com/treasure-data/pandas-td/blob/master/doc/tutorial.ipynb)
-- Magic functions (https://github.com/treasure-data/pandas-td/blob/master/doc/magic.ipynb)
 
 ## License
 
