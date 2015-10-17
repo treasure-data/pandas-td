@@ -26,7 +26,7 @@ On Mac OS X, you can install [Pandas](http://pandas.pydata.org/) and [Jupyter](h
 # Use Homebrew to install Python 3.x
 $ brew install python3
 
-# Install pandas, pandas-td, matplotlib, and jupyter
+# Install pandas, pandas-td, and jupyter
 $ pip3 install -r https://raw.githubusercontent.com/treasure-data/pandas-td/master/contrib/jupyter/requirements.txt
 
 # Set API key and start a session
