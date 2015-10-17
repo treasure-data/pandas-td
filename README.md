@@ -27,7 +27,7 @@ On Mac OS X, you can install [Pandas](http://pandas.pydata.org/) and [Jupyter](h
 $ brew install python3
 
 # Install pandas, pandas-td, and jupyter
-$ pip3 install -r https://raw.githubusercontent.com/treasure-data/pandas-td/master/contrib/jupyter/requirements.txt
+$ pip3 install pandas pandas-td jupyter
 
 # Set API key and start a session
 $ export TD_API_KEY=...
