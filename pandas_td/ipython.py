@@ -114,6 +114,8 @@ class QueryMagics(TDMagics):
                             help='output translated code without running query')
         parser.add_argument('-v', '--verbose', action='store_true',
                             help='verbose output')
+        parser.add_argument('-e', '--engine',
+                            help='use specified engine')
         parser.add_argument('-o', '--out',
                             help='store the result to variable')
         parser.add_argument('-O', '--out-file',
@@ -176,7 +178,11 @@ class QueryMagics(TDMagics):
         code.append("\n'''\n")
 
         # create_engine
-        engine = self.create_engine(engine_type, args, code)
+        if args.engine:
+            code.append("_e = {0}\n".format(args.engine))
+            engine = get_ipython().ev(args.engine)
+        else:
+            engine = self.create_engine(engine_type, args, code)
 
         # read_td_query
         code.append("_d = td.read_td_query(_q, _e)\n")
