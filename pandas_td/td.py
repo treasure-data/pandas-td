@@ -287,10 +287,76 @@ class ResultProxy(object):
         return frame
 
 class StreamingUploader(object):
-    def __init__(self, client, database, table):
+    def __init__(self, client, database, table, show_progress=False, clear_progress=False):
         self.client = client
         self.database = database
         self.table = table
+        self.start_at = datetime.datetime.utcnow().replace(microsecond=0)
+        self.messages = []
+        self.uploading_at = None
+        self.uploaded_at = None
+        self.initial_count = None
+        self.imported_count = None
+        self.import_timeout = False
+        self.imported_at = None
+        self.frame_size = None
+        if IPython and not sys.stdout.isatty():
+            # Enable progress for IPython notebook
+            self.show_progress = show_progress
+            self.clear_progress = clear_progress
+        else:
+            self.show_progress = False
+            self.clear_progress = False
+
+    def _html_text(self, text):
+        return '<div style="color: #888;"># {0}</div>'.format(text)
+
+    def _display_progress(self, cursize=None):
+        if not self.show_progress:
+            return
+        # header
+        html = '<div style="border-style: dashed; border-width: 1px;">\n'
+        # start
+        if self.start_at:
+            html += self._html_text('session started at {0}Z'.format(self.start_at.isoformat()))
+            for msg in self.messages:
+                html += msg + "<br>\n"
+        # uploading
+        if self.uploading_at:
+            html += self._html_text('upload started at {0}Z'.format(self.uploading_at.isoformat()))
+        if cursize is not None:
+            html += "Upload: {:,} / ".format(cursize)
+            html += "{:,} records".format(self.frame_size)
+            html += " (%.2f%%)<br>\n" % (cursize * 100.0 / self.frame_size)
+        if self.uploaded_at:
+            html += self._html_text('upload finished at {0}Z'.format(self.uploaded_at.isoformat()))
+        if self.imported_count:
+            html += "Imported: {:,} / ".format(self.imported_count)
+            html += "{:,} records".format(self.frame_size)
+            html += " (%.2f%%)<br>\n" % (self.imported_count * 100.0 / self.frame_size)
+        if self.import_timeout:
+            statuspage = None
+            if 'treasuredata.com' in self.client.api.endpoint:
+                statuspage = 'http://status.treasuredata.com/'
+            elif 'idcfcloud.com' in self.client.api.endpoint:
+                statuspage = 'http://ybi-status.idcfcloud.com/'
+            html += '<pre style="color: #c44;">'
+            html += '* Upload finished, but the data is not visible after waiting {0} seconds.\n'.format(self.import_timeout)
+            html += '* Note that this does not mean import failed, but it is taking longer than usual.\n'
+            if statuspage:
+                html += '* Check "Number of Queued Imports" at <a href="{0}" target="_blank">{0}</a> to see any delay.\n'.format(statuspage)
+            html += '</pre>\n'
+        if self.imported_at:
+            html += self._html_text('import finished at {0}Z'.format(self.imported_at.isoformat()))
+        # footer
+        html += '</div>\n'
+        # display
+        IPython.display.clear_output(True)
+        IPython.display.display(IPython.display.HTML(html))
+
+    def message(self, msg):
+        self.messages.append(msg)
+        self._display_progress()
 
     def _chunk_frame(self, frame, chunksize):
         for i in range((len(frame) - 1) // chunksize + 1):
@@ -316,8 +382,34 @@ class StreamingUploader(object):
         logger.debug('imported %d bytes in %.3f secs', data_size, elapsed)
 
     def upload_frame(self, frame, chunksize):
-        for chunk in self._chunk_frame(frame, chunksize):
+        t = self.client.table(self.database, self.table)
+        self.initial_count = t.count
+        self.uploading_at = datetime.datetime.utcnow().replace(microsecond=0)
+        self.frame_size = len(frame)
+        self._display_progress(0)
+        for i, chunk in enumerate(self._chunk_frame(frame, chunksize)):
             self._upload(self._gzip(self._pack(chunk)))
+            self._display_progress(min(i * chunksize + chunksize, self.frame_size))
+        self.uploaded_at = datetime.datetime.utcnow().replace(microsecond=0)
+        self._display_progress(self.frame_size)
+
+    def wait_for_import(self, count, timeout=300):
+        time_start = time.time()
+        while time.time() < time_start + timeout:
+            t = self.client.table(self.database, self.table)
+            self.imported_count = t.count - self.initial_count
+            if self.imported_count >= count:
+                break
+            self._display_progress(self.frame_size)
+            time.sleep(2)
+        self.imported_at = datetime.datetime.utcnow().replace(microsecond=0)
+        if self.imported_count >= count:
+            self._display_progress(self.frame_size)
+            if self.clear_progress:
+                IPython.display.clear_output()
+        else:
+            self.import_timeout = timeout
+            self._display_progress(self.frame_size)
 
 # public methods
 
@@ -565,12 +657,15 @@ def to_td(frame, name, con, if_exists='fail', time_col=None, time_index=None, in
         Format string for datetime objects
     '''
     database, table = name.split('.')
+    uploader = StreamingUploader(con.client, database, table, show_progress=True, clear_progress=True)
+    uploader.message('Streaming import into: {0}.{1}'.format(database, table))
 
     # check existence
     if if_exists == 'fail':
         try:
             con.client.table(database, table)
         except tdclient.api.NotFoundError:
+            uploader.message('creating new table...')
             con.client.create_log_table(database, table)
         else:
             raise RuntimeError('table "%s" already exists' % name)
@@ -580,12 +675,15 @@ def to_td(frame, name, con, if_exists='fail', time_col=None, time_index=None, in
         except tdclient.api.NotFoundError:
             pass
         else:
+            uploader.message('deleting old table...')
             con.client.delete_table(database, table)
+        uploader.message('creating new table...')
         con.client.create_log_table(database, table)
     elif if_exists == 'append':
         try:
             con.client.table(database, table)
         except tdclient.api.NotFoundError:
+            uploader.message('creating new table...')
             con.client.create_log_table(database, table)
     else:
         raise ValueError('invalid value for if_exists: %s' % if_exists)
@@ -601,8 +699,8 @@ def to_td(frame, name, con, if_exists='fail', time_col=None, time_index=None, in
     frame = _convert_date_format(frame, date_format)
 
     # upload
-    uploader = StreamingUploader(con.client, database, table)
     uploader.upload_frame(frame, chunksize)
+    uploader.wait_for_import(len(frame))
 
 def _convert_time_column(frame, time_col=None, time_index=None):
     if time_col is not None and time_index is not None:
