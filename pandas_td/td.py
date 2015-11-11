@@ -244,10 +244,14 @@ class ResultProxy(object):
 
     @property
     def size(self):
+        if not self.job.finished():
+            self.job.wait()
         return self.job.result_size
 
     @property
     def description(self):
+        if not self.job.finished():
+            self.job.wait()
         return self.job.result_schema
 
     def read(self, size=16384):
