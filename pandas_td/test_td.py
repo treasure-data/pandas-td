@@ -32,6 +32,10 @@ from nose.tools import ok_, eq_, raises
 
 # mocks
 
+class MockTable(object):
+    def __init__(self):
+        self.count = 0
+
 class MockJob(object):
     def __init__(self, status='success'):
         self._status = status
@@ -63,6 +67,9 @@ class MockJob(object):
 
     def status(self):
         return self._status
+
+    def finished(self):
+        return True
 
     def success(self):
         return self._status == 'success'
@@ -368,8 +375,24 @@ FROM test_table
 ''')
 
 class ToTdTestCase(TestCase):
+    def mock_client(self):
+        mock_table = MockTable()
+        client = MagicMock()
+        client.table = MagicMock(side_effect=tdclient.api.NotFoundError('test_table'))
+        client.delete_table = MagicMock()
+        def create_log_table(database, table):
+            client.table = MagicMock(return_value=mock_table)
+        client.create_log_table = MagicMock(side_effect=create_log_table)
+        def import_data(*args):
+            # FIXME: This assumes importing 2 records at once
+            mock_table.count += 2
+            return 0.1
+        client.import_data = MagicMock(side_effect=import_data)
+        return client
+
     def setUp(self):
         self.connection = connect('test-key', 'test-endpoint')
+        self.connection.client = self.mock_client()
         self.frame = pd.DataFrame([[1,2],[3,4]], columns=['x', 'y'])
 
     @raises(ValueError)
@@ -378,11 +401,7 @@ class ToTdTestCase(TestCase):
 
     @raises(TypeError)
     def test_datetime_is_not_supported(self):
-        # mock
         client = self.connection.client
-        client.table = MagicMock(side_effect=tdclient.api.NotFoundError('test_table'))
-        client.create_log_table = MagicMock()
-        client.import_data = MagicMock()
         # test
         frame = pd.DataFrame({'timestamp': [datetime.datetime(2000,1,1)]})
         to_td(frame, 'test_db.test_table', self.connection)
@@ -400,43 +419,26 @@ class ToTdTestCase(TestCase):
         to_td(self.frame, 'test_db.test_table', self.connection)
 
     def test_ok_if_not_exists(self):
-        # mock
         client = self.connection.client
-        client.table = MagicMock(side_effect=tdclient.api.NotFoundError('test_table'))
-        client.create_log_table = MagicMock()
-        client.import_data = MagicMock()
-        # test
         to_td(self.frame, 'test_db.test_table', self.connection)
         client.table.assert_called_with('test_db', 'test_table')
         client.create_log_table.assert_called_with('test_db', 'test_table')
 
     def test_replace_if_exists(self):
-        # mock
         client = self.connection.client
-        client.table = MagicMock(side_effect=tdclient.api.NotFoundError('test_table'))
-        client.create_log_table = MagicMock()
-        client.import_data = MagicMock()
         # first call
         to_td(self.frame, 'test_db.test_table', self.connection, if_exists='replace')
         client.create_log_table.assert_called_with('test_db', 'test_table')
-        # mock
-        client.table = MagicMock()
-        client.delete_table = MagicMock()
         # second call
         to_td(self.frame, 'test_db.test_table', self.connection, if_exists='replace')
         client.delete_table.assert_called_with('test_db', 'test_table')
         client.create_log_table.assert_called_with('test_db', 'test_table')
 
     def test_append_if_exists(self):
-        # mock
         client = self.connection.client
-        client.table = MagicMock(side_effect=tdclient.api.NotFoundError('test_table'))
-        client.create_log_table = MagicMock()
-        client.import_data = MagicMock()
         # first call
         to_td(self.frame, 'test_db.test_table', self.connection, if_exists='append')
         # second call
-        client.table = MagicMock()
         to_td(self.frame, 'test_db.test_table', self.connection, if_exists='append')
         client.create_log_table.assert_called_once_with('test_db', 'test_table')
 
