@@ -334,6 +334,12 @@ class StreamingUploader(object):
             html += "Imported: {:,} / ".format(self.imported_count)
             html += "{:,} records".format(self.frame_size)
             html += " (%.2f%%)<br>\n" % (self.imported_count * 100.0 / self.frame_size)
+            if self.imported_count > self.frame_size:
+                html += '<pre style="color: #c44;">'
+                html += '* Imported more records than uploaded.  This usually means\n'
+                html += '* other sessions imported some records into the same table.\n'
+                html += '* In this case, to_td() cannot detect when your import finished.\n'
+                html += '</pre>\n'
         if self.import_timeout:
             STATUSPAGES = {
                 'treasuredata.com': 'http://status.treasuredata.com/',
@@ -405,14 +411,15 @@ class StreamingUploader(object):
                 break
             self._display_progress(self.frame_size)
             time.sleep(2)
+        # import finished
         self.imported_at = datetime.datetime.utcnow().replace(microsecond=0)
-        if self.imported_count >= count:
-            self._display_progress(self.frame_size)
-            if self.clear_progress:
-                IPython.display.clear_output()
-        else:
+        # import timeout
+        if self.imported_count < count:
             self.import_timeout = timeout
-            self._display_progress(self.frame_size)
+        self._display_progress(self.frame_size)
+        # clear progress
+        if self.clear_progress and self.imported_count == count:
+            IPython.display.clear_output()
 
 # public methods
 
