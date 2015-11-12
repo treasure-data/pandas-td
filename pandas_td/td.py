@@ -335,16 +335,19 @@ class StreamingUploader(object):
             html += "{:,} records".format(self.frame_size)
             html += " (%.2f%%)<br>\n" % (self.imported_count * 100.0 / self.frame_size)
         if self.import_timeout:
-            statuspage = None
-            if 'treasuredata.com' in self.client.api.endpoint:
-                statuspage = 'http://status.treasuredata.com/'
-            elif 'idcfcloud.com' in self.client.api.endpoint:
-                statuspage = 'http://ybi-status.idcfcloud.com/'
+            STATUSPAGES = {
+                'treasuredata.com': 'http://status.treasuredata.com/',
+                'idcfcloud.com': 'http://ybi-status.idcfcloud.com/',
+            }
+            statuspage_url = None
+            for domain, url in STATUSPAGES.items():
+                if domain in self.client.api.endpoint:
+                    statuspage_url = url
             html += '<pre style="color: #c44;">'
             html += '* Upload finished, but the data is not visible after waiting {0} seconds.\n'.format(self.import_timeout)
-            html += '* Note that this does not mean import failed, but it is taking longer than usual.\n'
-            if statuspage:
-                html += '* Check "Number of Queued Imports" at <a href="{0}" target="_blank">{0}</a> to see any delay.\n'.format(statuspage)
+            html += '* This does not mean import failed, but it is taking longer than usual.\n'
+            if statuspage_url:
+                html += '* Check <a href="{0}" target="_blank">{0}</a> for import delays.\n'.format(statuspage_url)
             html += '</pre>\n'
         if self.imported_at:
             html += self._html_text('import finished at {0}Z'.format(self.imported_at.isoformat()))
