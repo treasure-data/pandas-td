@@ -1,5 +1,10 @@
 # Version History
 
+## 0.8.6 (2015-11-12)
+
+* to_td() now waits until imported data becomes visible.  It also prints progress in HTML.
+* New option --engine (-e) for magic query functions.
+
 ## 0.8.5 (2015-10-09)
 
 * New function ``read_td_job``.
