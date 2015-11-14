@@ -124,41 +124,9 @@ class QueryMagics(TDMagics):
                             help='disable progress output')
         return parser
 
-    def create_engine(self, engine_type, args, code):
-        name = '{0}:{1}'.format(engine_type, args.database)
-        if args.quiet:
-            params = {'show_progress': False}
-        elif args.verbose:
-            params = {'show_progress': True, 'clear_progress': False}
-        else:
-            params = {}
-        args = [repr(name)] + ['{0}={1}'.format(k, v) for k, v in params.items()]
-        code.append("_e = td.create_engine({0})\n".format(', '.join(args)))
-        return td.create_engine(name, con=self.context.connect(), **params)
-
-    def pivot_table(self, d, code):
-        def is_dimension(c, t):
-            return c.endswith('_id') or t == np.dtype('O')
-        index = d.columns[0]
-        dimension = [c for c, t in zip(d.columns[1:], d.dtypes[1:]) if is_dimension(c, t)]
-        measure = [c for c, t in zip(d.columns[1:], d.dtypes[1:]) if not is_dimension(c, t)]
-        if len(dimension) == 0:
-            code.append("_d.set_index({0}, inplace=True)\n".format(repr(index)))
-            d.set_index(index, inplace=True)
-            return d
-        if len(dimension) == 1:
-            dimension = dimension[0]
-        if len(measure) == 1:
-            measure = measure[0]
-        code.append("_d = _d.pivot_table({0}, {1}, {2})\n".format(repr(measure), repr(index), repr(dimension)))
-        return d.pivot_table(measure, index, dimension)
-
-    def run_query(self, engine_type, line, cell):
+    def parse_args(self, engine_type, line):
         parser = self.create_parser(engine_type)
-        try:
-            args = parser.parse_args(line.split())
-        except SystemExit:
-            return
+        args = parser.parse_args(line.split())
 
         # implicit options
         if args.plot:
@@ -168,75 +136,121 @@ class QueryMagics(TDMagics):
         if args.database is None:
             args.database = self.context.database
 
-        code = []
-        code.append("# translated code\n")
+        return args
+
+    def push_code(self, code, end='\n'):
+        self.code_list.append(code + end)
+
+    def get_code_block(self):
+        html = '<pre style="background-color: #ffe;">'
+        html += ''.join(self.code_list)
+        html += '</pre>\n'
+        return html
+
+    def create_engine(self, engine_type, args):
+        name = '{0}:{1}'.format(engine_type, args.database)
+        if args.quiet:
+            params = {'show_progress': False}
+        elif args.verbose:
+            params = {'show_progress': True, 'clear_progress': False}
+        else:
+            params = {}
+        args = [repr(name)] + ['{0}={1}'.format(k, v) for k, v in params.items()]
+        self.push_code("_e = td.create_engine({0})".format(', '.join(args)))
+        return td.create_engine(name, con=self.context.connect(), **params)
+
+    def pivot_table(self, d):
+        def is_dimension(c, t):
+            return c.endswith('_id') or t == np.dtype('O')
+        index = d.columns[0]
+        dimension = [c for c, t in zip(d.columns[1:], d.dtypes[1:]) if is_dimension(c, t)]
+        measure = [c for c, t in zip(d.columns[1:], d.dtypes[1:]) if not is_dimension(c, t)]
+        if len(dimension) == 0:
+            self.push_code("_d.set_index({0}, inplace=True)".format(repr(index)))
+            d.set_index(index, inplace=True)
+            return d
+        if len(dimension) == 1:
+            dimension = dimension[0]
+        if len(measure) == 1:
+            measure = measure[0]
+        self.push_code("_d = _d.pivot_table({0}, {1}, {2})".format(repr(measure), repr(index), repr(dimension)))
+        return d.pivot_table(measure, index, dimension)
+
+    def run_query(self, engine_type, line, cell):
+        ip = get_ipython()
+
+        try:
+            args = self.parse_args(engine_type, line)
+        except SystemExit:
+            return
+
+        self.code_list = []
+        self.push_code("# translated code")
 
         # build query
-        query = cell.format(**get_ipython().user_ns)
-        code.append("_q = '''\n")
-        code.append(query)
-        code.append("\n'''\n")
+        query = cell.format(**ip.user_ns)
+        self.push_code("_q = '''")
+        self.push_code(query)
+        self.push_code("'''")
 
         # create_engine
         if args.engine:
-            code.append("_e = {0}\n".format(args.engine))
-            engine = get_ipython().ev(args.engine)
+            engine = ip.ev(args.engine)
+            self.push_code("_e = {0}".format(args.engine))
         else:
-            engine = self.create_engine(engine_type, args, code)
+            engine = self.create_engine(engine_type, args)
 
         # read_td_query
-        code.append("_d = td.read_td_query(_q, _e)\n")
+        self.push_code("_d = td.read_td_query(_q, _e)")
         if args.dry_run:
-            html = '<pre style="background-color: #ffe;">' + ''.join(code) + '</pre>\n'
-            IPython.display.display(IPython.display.HTML(html))
+            IPython.display.display(IPython.display.HTML(self.get_code_block()))
             return
         d = td.read_td_query(query, engine)
 
         # convert 'time' to datetime
         if 'time' in d.columns:
             if d['time'].dtype == np.dtype('O'):
-                code.append("_d['time'] = pd.to_datetime(_d['time'])\n")
+                self.push_code("_d['time'] = pd.to_datetime(_d['time'])")
                 d['time'] = pd.to_datetime(d['time'])
             else:
-                code.append("_d['time'] = pd.to_datetime(_d['time'], unit='s')\n")
+                self.push_code("_d['time'] = pd.to_datetime(_d['time'], unit='s')")
                 d['time'] = pd.to_datetime(d['time'], unit='s')
 
         # pivot_table
         if args.pivot:
-            d = self.pivot_table(d, code)
+            d = self.pivot_table(d)
         elif 'time' in d.columns:
-            code.append("_d.set_index('time', inplace=True)\n")
+            self.push_code("_d.set_index('time', inplace=True)")
             d.set_index('time', inplace=True)
 
         # return value
         r = d
         if args.out:
-            code.append("{0} = _d\n".format(args.out))
-            get_ipython().push({args.out: d})
+            self.push_code("{0} = _d".format(args.out))
+            ip.push({args.out: d})
             r = None
         if args.out_file:
             if args.out_file[0] in ["'", '"']:
-                path = os.path.expanduser(get_ipython().ev(args.out_file))
+                path = os.path.expanduser(ip.ev(args.out_file))
             else:
                 path = os.path.expanduser(args.out_file)
             if d.index.name:
-                code.append("_d.to_csv({0})\n".format(repr(path)))
+                self.push_code("_d.to_csv({0})".format(repr(path)))
                 d.to_csv(path)
             else:
-                code.append("_d.to_csv({0}, index=False)\n".format(repr(path)))
+                self.push_code("_d.to_csv({0}, index=False)".format(repr(path)))
                 d.to_csv(path, index=False)
             print("INFO: saved to '{0}'".format(path))
             r = None
         if args.plot:
-            code.append("_d.plot()\n")
+            self.push_code("_d.plot()")
             r = d.plot()
         elif r is not None:
-            code.append("_d\n")
+            self.push_code("_d")
 
         # output
         if args.verbose:
-            html = '<pre style="background-color: #ffe;">' + ''.join(code) + '</pre>\n'
-            IPython.display.display(IPython.display.HTML(html))
+            IPython.display.display(IPython.display.HTML(self.get_code_block()))
         return r
 
     @magic.cell_magic
