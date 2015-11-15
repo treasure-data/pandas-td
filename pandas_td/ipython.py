@@ -116,6 +116,8 @@ class QueryMagics(TDMagics):
                             help='verbose output')
         parser.add_argument('-e', '--engine',
                             help='use specified engine')
+        parser.add_argument('-a', '--queue',
+                            help='run asynchronously using a queue')
         parser.add_argument('-o', '--out',
                             help='store the result to variable')
         parser.add_argument('-O', '--out-file',
@@ -129,6 +131,8 @@ class QueryMagics(TDMagics):
         args = parser.parse_args(line.split())
 
         # implicit options
+        if args.queue:
+            args.quiet = True
         if args.plot:
             args.pivot = True
 
@@ -147,17 +151,41 @@ class QueryMagics(TDMagics):
         html += '</pre>\n'
         return html
 
-    def create_engine(self, engine_type, args):
-        name = '{0}:{1}'.format(engine_type, args.database)
-        if args.quiet:
-            params = {'show_progress': False}
-        elif args.verbose:
-            params = {'show_progress': True, 'clear_progress': False}
+    def build_query(self, cell):
+        ip = get_ipython()
+        query = cell.format(**ip.user_ns)
+        self.push_code("_q = '''")
+        self.push_code(query)
+        self.push_code("'''")
+        return query
+
+    def build_engine(self, engine_type, args):
+        ip = get_ipython()
+        if args.engine:
+            # Use the existing one
+            engine = ip.ev(args.engine)
+            self.push_code("_e = {0}".format(args.engine))
+            return engine
         else:
-            params = {}
-        args = [repr(name)] + ['{0}={1}'.format(k, v) for k, v in params.items()]
-        self.push_code("_e = td.create_engine({0})".format(', '.join(args)))
-        return td.create_engine(name, con=self.context.connect(), **params)
+            # Create a new one
+            name = '{0}:{1}'.format(engine_type, args.database)
+            if args.quiet:
+                params = {'show_progress': False, 'clear_progress': False}
+            elif args.verbose:
+                params = {'show_progress': True, 'clear_progress': False}
+            else:
+                params = {}
+            args = [repr(name)] + ['{0}={1}'.format(k, v) for k, v in params.items()]
+            self.push_code("_e = td.create_engine({0})".format(', '.join(args)))
+            return td.create_engine(name, con=self.context.connect(), **params)
+
+    def build_queue(self, engine, args):
+        ip = get_ipython()
+        self.push_code("{0} = td.create_queue(_e, name='{0}')".format(args.queue))
+        queue = td.create_queue(engine, name=args.queue)
+        if not args.dry_run:
+            ip.push({args.queue: queue})
+        return queue
 
     def pivot_table(self, d):
         def is_dimension(c, t):
@@ -184,21 +212,35 @@ class QueryMagics(TDMagics):
         except SystemExit:
             return
 
+        queue = None
+        if args.queue:
+            try:
+                queue = ip.ev(args.queue)
+            except NameError:
+                pass
+
         self.code_list = []
         self.push_code("# translated code")
 
-        # build query
-        query = cell.format(**ip.user_ns)
-        self.push_code("_q = '''")
-        self.push_code(query)
-        self.push_code("'''")
+        # query
+        query = self.build_query(cell)
 
-        # create_engine
-        if args.engine:
-            engine = ip.ev(args.engine)
-            self.push_code("_e = {0}".format(args.engine))
-        else:
-            engine = self.create_engine(engine_type, args)
+        # engine
+        if queue is None:
+            engine = self.build_engine(engine_type, args)
+
+        # queue
+        if args.queue:
+            if queue is None:
+                queue = self.build_queue(engine, args)
+            self.push_code("{0}.query(_q)".format(args.queue))
+            if args.dry_run:
+                IPython.display.display(IPython.display.HTML(self.get_code_block()))
+                return
+            name = "In[{0}]".format(ip.ev("len(In) - 1"))
+            task = queue.query(query, name=name)
+            print('Queued as {0}[{1}]'.format(args.queue, task.task_id))
+            return
 
         # read_td_query
         self.push_code("_d = td.read_td_query(_q, _e)")

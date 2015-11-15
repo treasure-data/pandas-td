@@ -1,4 +1,7 @@
 certifi
+pytz
+tzlocal
+futures>=3.0.3
 six>=1.9.0
 pandas>=0.16.0
 requests>=2.7.0

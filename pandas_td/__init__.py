@@ -5,10 +5,12 @@ from .td import read_td_query
 from .td import read_td_job
 from .td import read_td_table
 from .td import to_td
+from .queue import create_queue
 
 __all__ = [
     'connect',
     'create_engine',
+    'create_queue',
     'read_td',
     'read_td_query',
     'read_td_job',

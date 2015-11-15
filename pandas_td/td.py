@@ -52,7 +52,11 @@ class Connection(object):
                 "Python/{0}.{1}.{2}.{3}.{4}".format(*list(sys.version_info)),
             ]
             kwargs['user_agent'] = "pandas-td/{0} ({1})".format(__version__, ' '.join(versions))
-        self.client = tdclient.Client(**kwargs)
+        self.kwargs = kwargs
+        self.client = self.get_client()
+
+    def get_client(self):
+        return tdclient.Client(**self.kwargs)
 
     @property
     def apikey(self):
