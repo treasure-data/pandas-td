@@ -4,8 +4,7 @@ import os
 import requests
 
 class SlackNotifier(object):
-    def __init__(self, client):
-        self.client = client
+    def __init__(self):
         self.webhook_url = os.environ['TD_SLACK_WEBHOOK_URL']
         self.targets = os.environ.get('TD_SLACK_TARGETS')
         self.author = os.environ.get('TD_USER')
@@ -41,9 +40,9 @@ class SlackNotifier(object):
         self.post(message, attachments=[self.task_attachment(task) for task in tasks])
 
     def task_attachment(self, task):
-        job = self.client.job(task.job_id)
-        if task.task_name:
-            task_name = "{0}: Job ID {1}".format(task.task_name, task.job_id)
+        job = task.job
+        if task.name:
+            task_name = "{0}: Job ID {1}".format(task.name, task.job_id)
         else:
             task_name = "Job ID {0}".format(task.job_id)
         params = {}

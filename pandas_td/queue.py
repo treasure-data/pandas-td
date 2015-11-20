@@ -13,11 +13,12 @@ import logging
 logger = logging.getLogger(__name__)
 
 class QueryTask(object):
-    def __init__(self, query, kwargs):
+    def __init__(self, query, engine, kwargs):
         self.query = query
+        self.engine = engine
         self.kwargs = kwargs
-        self.task_id = None
-        self.task_name = None
+        self.index = None
+        self.name = None
         self.status = None
         self.created_at = None
         self.issued_at = None
@@ -29,12 +30,19 @@ class QueryTask(object):
         self.future = None
         self.notified = False
 
+    @property
+    def job(self):
+        if not self.job_id:
+            raise AttributeError()
+        return self.engine.connection.get_client().job(self.job_id)
+
     def __repr__(self):
-        return "<{0}.{1} task_id={2} task_name={3}>".format(
+        return "<{0}.{1} index={2} name={3} status={4}>".format(
             self.__module__,
             self.__class__.__name__,
-            self.task_id,
-            self.task_name)
+            self.index,
+            self.name,
+            self.status)
 
     def to_dict(self):
         return {
@@ -53,11 +61,12 @@ class QueryTask(object):
         if self.status in ['error', 'killed']:
             logger.error('%s', r)
             return
+        if type(r) is concurrent.futures.Future:
+            r = r.result()
         return r
 
 class JobQueue(object):
-    def __init__(self, engine, name=None, workers=4):
-        self.engine = engine
+    def __init__(self, name=None, workers=4):
         self.name = name
         self.tasks = []
         self.job_pool = concurrent.futures.ThreadPoolExecutor(max_workers=workers)
@@ -65,13 +74,10 @@ class JobQueue(object):
         # notifier
         if 'TD_SLACK_WEBHOOK_URL' in os.environ:
             from . import slack
-            self.notifier = slack.SlackNotifier(self.get_client())
+            self.notifier = slack.SlackNotifier()
         else:
             self.notifier = None
             logging.warning('no notification method configured')
-
-    def get_client(self):
-        return self.engine.connection.get_client()
 
     def __getitem__(self, i):
         return self.tasks[i]
@@ -86,10 +92,10 @@ class JobQueue(object):
         return pd.DataFrame([task.to_dict() for task in self.tasks],
                             columns=['created_at', 'status', 'job_id'])
 
-    def query(self, query, name=None, **kwargs):
-        task = QueryTask(query, kwargs)
-        task.task_id = len(self.tasks)
-        task.task_name = name
+    def query(self, query, engine, name=None, **kwargs):
+        task = QueryTask(query, engine, kwargs)
+        task.index = len(self.tasks)
+        task.name = name
         task.status = 'pending'
         task.created_at = self.now()
         self.tasks.append(task)
@@ -99,11 +105,11 @@ class JobQueue(object):
         task.future.add_done_callback(self.notification_callback)
         return task
 
-    def download(self, job_id, name=None, **kwargs):
+    def download(self, job_id, engine, name=None, **kwargs):
         job = self.get_client().job(job_id)
-        task = QueryTask(job.query, kwargs)
-        task.task_id = len(self.tasks)
-        task.task_name = name
+        task = QueryTask(job.query, engine, kwargs)
+        task.index = len(self.tasks)
+        task.name = name
         task.job_id = job_id
         task.status = 'pending'
         task.created_at = self.now()
@@ -116,11 +122,12 @@ class JobQueue(object):
 
     def do_query(self, task):
         # parameters
-        params = self.engine._params.copy()
+        params = task.engine._params.copy()
         params.update(task.kwargs)
 
         # issue query
-        job = self.get_client().query(self.engine.database, task.query, **params)
+        client = task.engine.connection.get_client()
+        job = client.query(task.engine.database, task.query, **params)
         task.status = 'queued'
         task.issued_at = self.now()
         task.job_id = job.job_id
@@ -144,7 +151,7 @@ class JobQueue(object):
     def do_download(self, task, job=None):
         task.status = 'downloading'
         task.download_start_at = self.now()
-        r = self.engine.get_result(job, wait=True)
+        r = task.engine.get_result(job, wait=True)
         d = r.to_dataframe()
         task.status = 'downloaded'
         task.download_end_at = self.now()
@@ -153,7 +160,7 @@ class JobQueue(object):
     def notification_callback(self, future):
         task = future.task
         exc = future.exception()
-        command = "{0}[{1}].result()".format(self.name or 'queue', task.task_id)
+        command = "{0}[{1}].result()".format(self.name or 'queue', task.index)
 
         # exceptions
         if exc is not None:
@@ -203,10 +210,10 @@ class JobQueue(object):
             except:
                 logger.error("%s", traceback.format_exc())
 
-def create_queue(engine, name=None, workers=4):
-    '''Create a job queue using a given query engine.
+def create_queue(name=None, workers=4):
+    '''Create a job queue.
 
-    The following environment variables can be used to contorol notifications:
+    The following environment variables are used to contorol notifications:
 
       TD_USER                 Your email address
       TD_SLACK_WEBHOOK_URL    Slack Incoming Webhook URL
@@ -214,8 +221,6 @@ def create_queue(engine, name=None, workers=4):
 
     Parameters
     ----------
-    engine : QueryEngine
-        Handler returned by connect. If not given, default connection is used.
     name : string, optional
         Queue name, used for notifications.
     workers : integer, default 4
@@ -225,4 +230,4 @@ def create_queue(engine, name=None, workers=4):
     -------
     JobQueue
     '''
-    return JobQueue(engine, name=name, workers=workers)
+    return JobQueue(name=name, workers=workers)
