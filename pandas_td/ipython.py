@@ -188,6 +188,7 @@ class QueryMagics(TDMagics):
             return queue
 
     def queue_query(self, query, engine, args):
+        ip = get_ipython()
         try:
             queue = ip.ev(args.queue)
         except NameError:
@@ -196,8 +197,10 @@ class QueryMagics(TDMagics):
         if args.dry_run:
             return self.display_code_block()
         name = "In[{0}]".format(ip.ev("len(In) - 1"))
-        task = queue.query(query, engine, name=name)
-        print('Queued as {0}[{1}]'.format(args.queue, task.task_id))
+        def query_callback(d):
+            return self.post_process(d, args)
+        task = queue.query(query, engine, name=name, callback=query_callback)
+        print('Queued as {0}[{1}]'.format(args.queue, task.index))
 
     def convert_time(self, d):
         if 'time' in d.columns:
@@ -226,6 +229,8 @@ class QueryMagics(TDMagics):
         return d.pivot(index, dimension, measure)
 
     def post_process(self, d, args):
+        ip = IPython.get_ipython()
+
         # convert 'time' to datetime
         self.convert_time(d)
 

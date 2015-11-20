@@ -28,6 +28,7 @@ class QueryTask(object):
         self.download_start_at = None
         self.download_end_at = None
         self.future = None
+        self.callback = None
         self.notified = False
 
     @property
@@ -92,11 +93,12 @@ class JobQueue(object):
         return pd.DataFrame([task.to_dict() for task in self.tasks],
                             columns=['created_at', 'status', 'job_id'])
 
-    def query(self, query, engine, name=None, **kwargs):
+    def query(self, query, engine, name=None, callback=None, **kwargs):
         task = QueryTask(query, engine, kwargs)
         task.index = len(self.tasks)
         task.name = name
         task.status = 'pending'
+        task.callback = callback
         task.created_at = self.now()
         self.tasks.append(task)
         # schedule query
@@ -105,13 +107,14 @@ class JobQueue(object):
         task.future.add_done_callback(self.notification_callback)
         return task
 
-    def download(self, job_id, engine, name=None, **kwargs):
+    def download(self, job_id, engine, name=None, callback=None, **kwargs):
         job = self.get_client().job(job_id)
         task = QueryTask(job.query, engine, kwargs)
         task.index = len(self.tasks)
         task.name = name
         task.job_id = job_id
         task.status = 'pending'
+        task.callback = callback
         task.created_at = self.now()
         self.tasks.append(task)
         # schedule download
@@ -127,6 +130,9 @@ class JobQueue(object):
 
         # issue query
         client = task.engine.connection.get_client()
+        print(task.engine.database)
+        print(task.query)
+        print(params)
         job = client.query(task.engine.database, task.query, **params)
         task.status = 'queued'
         task.issued_at = self.now()
@@ -155,6 +161,8 @@ class JobQueue(object):
         d = r.to_dataframe()
         task.status = 'downloaded'
         task.download_end_at = self.now()
+        if task.callback:
+            return task.callback(d)
         return d
 
     def notification_callback(self, future):
