@@ -136,14 +136,10 @@ class JobQueue(object):
             return job.debug['stderr'] if job.debug else 'unkown error'
 
         # download
-        if job.result_size < 8 * 1024:
-            # download now
-            return self.do_download(task, job)
-        else:
-            # download later
-            task.future = self.download_pool.submit(self.do_download, task, job)
-            task.future.task = task
-            task.future.add_done_callback(self.notification_callback)
+        future = self.download_pool.submit(self.do_download, task, job)
+        future.task = task
+        future.add_done_callback(self.notification_callback)
+        return future
 
     def do_download(self, task, job=None):
         task.status = 'downloading'
