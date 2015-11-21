@@ -15,14 +15,6 @@ import logging
 logger = logging.getLogger(__name__)
 
 
-class BaseNotifier(object):
-    def notify(self, message, status, text):
-        raise NotImplemented()
-
-    def notify_tasks(self, message, tasks):
-        raise NotImplemented()
-
-
 class QueryTask(object):
     def __init__(self, query, engine, kwargs):
         self.query = query
@@ -83,19 +75,20 @@ class JobQueue(object):
         self.tasks = []
         self.job_pool = concurrent.futures.ThreadPoolExecutor(max_workers=workers)
         self.download_pool = concurrent.futures.ThreadPoolExecutor(max_workers=multiprocessing.cpu_count())
-        self.notifier = self.get_notifier()
-
-    def get_notifier(self):
-        if 'TD_NOTIFIER_CLASS' in os.environ:
-            name = os.environ['TD_NOTIFIER_CLASS']
-        elif 'TD_HIPCHAT_APIKEY' in os.environ:
-            name = 'pandas_td.drivers.hipchat.HipchatNotifier'
-        elif 'TD_SLACK_WEBHOOK_URL' in os.environ:
-            name = 'pandas_td.drivers.slack.SlackNotifier'
-        else:
+        self.notifiers = list(self.get_notifiers())
+        if len(self.notifiers) == 0:
             logging.warning('no notification method defined')
-            return None
-        # load notifier
+            self.notifiers.append(self.get_notifier('pandas_td.notifier.LoggingNotifier'))
+
+    def get_notifiers(self):
+        # Bundled classes:
+        # - pandas_td.notifier.LoggingNotifier
+        # - pandas_td.drivers.hipchat.HipChatNotifier
+        # - pandas_td.drivers.slack.SlackNotifier
+        if 'TD_NOTIFIER_CLASS' in os.environ:
+            yield self.get_notifier(os.environ['TD_NOTIFIER_CLASS'])
+
+    def get_notifier(self, name):
         logger.info('initializing notifier: %s', name)
         m = re.match('(.*)\\.([^.]+)', name)
         if not m:
@@ -218,23 +211,16 @@ class JobQueue(object):
                 task.notified = True
 
     def notify(self, message, status, text):
-        if self.notifier:
+        for notifier in self.notifiers:
             try:
-                self.notifier.notify(message, status, text)
+                notifier.notify(message, status, text)
             except:
                 logger.error("%s", traceback.format_exc())
-            return
-        if status == 'info':
-            logger.info("%s", text)
-        elif status == 'warning':
-            logger.warning("%s", text)
-        else:
-            logger.error("%s", text)
 
     def notify_tasks(self, message, tasks):
-        if self.notifier:
+        for notifier in self.notifiers:
             try:
-                self.notifier.notify_tasks(message, tasks)
+                notifier.notify_tasks(message, tasks)
             except:
                 logger.error("%s", traceback.format_exc())
 

@@ -3,7 +3,7 @@ import json
 import os
 import requests
 
-from pandas_td.queue import BaseNotifier
+from pandas_td.notifier import BaseNotifier
 
 class SlackNotifier(BaseNotifier):
     def __init__(self):
