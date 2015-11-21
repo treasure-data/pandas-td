@@ -377,6 +377,11 @@ class StreamingUploader(object):
     def _pack(self, chunk):
         packer = msgpack.Packer(autoreset=False)
         for _, row in chunk.iterrows():
+            # row.dtype can be non-object (such as numpy.int64 or numpy.float64)
+            # when column types are homogeneous.  In this case, packer.pack raises
+            # an exception because it doesn't know how to encode those data types.
+            if row.dtype.name != 'object':
+                row = row.astype('object')
             row.dropna(inplace=True)
             packer.pack(dict(row))
         return packer.bytes()

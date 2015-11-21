@@ -262,6 +262,14 @@ class StreamingUploaderTestCase(TestCase):
             records = records[1:]
         eq_(records, [])
 
+    def test_pack_int_array(self):
+        records = [{'time': 0, 'x': 0, 'y': 0}, {'time': 1, 'x': 1, 'y': 1}]
+        data = self.uploader._pack(pd.DataFrame(records))
+        for unpacked in msgpack.Unpacker(io.BytesIO(data), encoding='utf-8'):
+            eq_(unpacked, records[0])
+            records = records[1:]
+        eq_(records, [])
+
     def test_drop_nan(self):
         records = [{'x': 'a', 'y': np.nan}, {'x': np.nan, 'y': 1.0}]
         data = self.uploader._pack(pd.DataFrame(records))
