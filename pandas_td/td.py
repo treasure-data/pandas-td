@@ -301,7 +301,7 @@ class StreamingUploader(object):
         self.uploaded_at = None
         self.initial_count = None
         self.imported_count = None
-        self.import_timeout = False
+        self.import_timeout = None
         self.imported_at = None
         self.frame_size = None
         if IPython and not sys.stdout.isatty():
@@ -332,9 +332,9 @@ class StreamingUploader(object):
             html += "Upload: {:,} / ".format(cursize)
             html += "{:,} records".format(self.frame_size)
             html += " (%.2f%%)<br>\n" % (cursize * 100.0 / self.frame_size)
-        if self.uploaded_at:
+        if self.uploaded_at is not None:
             html += self._html_text('upload finished at {0}Z'.format(self.uploaded_at.isoformat()))
-        if self.imported_count:
+        if self.imported_count is not None:
             html += "Imported: {:,} / ".format(self.imported_count)
             html += "{:,} records".format(self.frame_size)
             html += " (%.2f%%)<br>\n" % (self.imported_count * 100.0 / self.frame_size)
@@ -344,7 +344,7 @@ class StreamingUploader(object):
                 html += '* other sessions imported some records into the same table.\n'
                 html += '* In this case, to_td() cannot detect when your import finished.\n'
                 html += '</pre>\n'
-        if self.import_timeout:
+        if self.import_timeout is not None:
             STATUSPAGES = {
                 'treasuredata.com': 'http://status.treasuredata.com/',
                 'idcfcloud.com': 'http://ybi-status.idcfcloud.com/',
@@ -359,7 +359,7 @@ class StreamingUploader(object):
             if statuspage_url:
                 html += '* Check <a href="{0}" target="_blank">{0}</a> for import delays.\n'.format(statuspage_url)
             html += '</pre>\n'
-        if self.imported_at:
+        if self.imported_at is not None:
             html += self._html_text('import finished at {0}Z'.format(self.imported_at.isoformat()))
         # footer
         html += '</div>\n'
@@ -404,6 +404,7 @@ class StreamingUploader(object):
             self._upload(self._gzip(self._pack(chunk)))
             self._display_progress(min(i * chunksize + chunksize, self.frame_size))
         self.uploaded_at = datetime.datetime.utcnow().replace(microsecond=0)
+        self.imported_count = 0
         self._display_progress(self.frame_size)
 
     def wait_for_import(self, count, timeout=300):
