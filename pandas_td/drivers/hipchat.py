@@ -38,30 +38,23 @@ class HipChatNotifier(BaseNotifier):
                           headers = headers)
         r.raise_for_status()
 
-    def notify(self, message, status, text):
+    def post_message(self, status, message, text=None, notify=True):
         COLORS = {
             'info': 'green',
             'warning': 'yellow',
             'error': 'red',
         }
-        card = {
-            'style': 'application',
-            'format': 'medium',
-            'title': 'Exception',
-            'description': text,
-            'activity': {
-                'html': text,
+        if text:
+            card = {
+                'style': 'application',
+                'format': 'medium',
+                'title': text.split('\n')[0],
+                'description': '\n'.join(text.split('\n')[1:]),
             }
-        }
-        self.post(message=message, color=COLORS[status], notify=True)
-        self.post(card=card, color=COLORS[status])
+            self.post(card=card, color=COLORS[status])
+        self.post(message=message, color=COLORS[status], notify=notify)
 
-    def notify_tasks(self, message, tasks):
-        for task in tasks:
-            self.notify_task(task)
-        self.post(message, notify=True)
-
-    def notify_task(self, task):
+    def post_task(self, task, notify=False):
         job = task.job
         status = job.status()
         if task.name:
@@ -73,9 +66,10 @@ class HipChatNotifier(BaseNotifier):
             'format': 'medium',
             'title': '{0} {1}'.format(task_name, status),
             'url': job.url,
-            # the first line of query 
+            # the first line of query
             'description': job.query.split('\n')[0],
         }
+        # author
         if self.author:
             digest = hashlib.md5(self.author.encode('ascii')).hexdigest()
             params['icon'] = {'url': 'http://www.gravatar.com/avatar/' + digest}
@@ -104,11 +98,8 @@ class HipChatNotifier(BaseNotifier):
             })
         # attributes
         params['attributes'] = attributes
-        # status
-        status = job.status()
         if status == 'running':
             color = 'yellow'
-            params['title'] = '{0} still running'.format(task_name)
         elif status == 'success':
             color = 'green'
         else:

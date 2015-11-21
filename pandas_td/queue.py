@@ -5,6 +5,7 @@ import importlib
 import os
 import pytz
 import re
+import six
 import traceback
 import tzlocal
 
@@ -28,9 +29,10 @@ class QueryTask(object):
         self.job_id = None
         self.job_start_at = None
         self.job_end_at = None
+        self.job_future = None
         self.download_start_at = None
         self.download_end_at = None
-        self.future = None
+        self.download_future = None
         self.callback = None
         self.notified = False
 
@@ -48,6 +50,15 @@ class QueryTask(object):
             self.name,
             self.status)
 
+    def done(self):
+        if self.notified:
+            return True
+        if (self.job_future is None) or (not self.job_future.done()):
+            return False
+        if (self.download_future is None) or (not self.download_future.done()):
+            return False
+        return True
+
     def to_dict(self):
         return {
             'status': self.status,
@@ -61,13 +72,16 @@ class QueryTask(object):
         }
 
     def result(self):
-        r = self.future.result()
-        if self.status in ['error', 'killed']:
-            logger.error('%s', r)
-            return
-        if type(r) is concurrent.futures.Future:
-            r = r.result()
-        return r
+        if self.job_future:
+            r = self.job_future.result()
+            if isinstance(r, six.string_types):
+                logger.error('%s', r)
+                return
+        if self.download_future:
+            return self.download_future.result()
+        # cannot happen
+        raise ValueError('not started yet')
+
 
 class JobQueue(object):
     def __init__(self, name=None, workers=4):
@@ -118,9 +132,9 @@ class JobQueue(object):
         task.created_at = self.now()
         self.tasks.append(task)
         # schedule query
-        task.future = self.job_pool.submit(self.do_query, task)
-        task.future.task = task
-        task.future.add_done_callback(self.notification_callback)
+        task.job_future = self.job_pool.submit(self.do_query, task)
+        task.job_future.task = task
+        task.job_future.add_done_callback(self.notification_callback)
         return task
 
     def download(self, job_id, engine, name=None, callback=None, **kwargs):
@@ -134,9 +148,9 @@ class JobQueue(object):
         task.created_at = self.now()
         self.tasks.append(task)
         # schedule download
-        task.future = self.download_pool.submit(self.do_download, task, job)
-        task.future.task = task
-        task.future.add_done_callback(self.notification_callback)
+        task.download_future = self.download_pool.submit(self.do_download, task, job)
+        task.download_future.task = task
+        task.download_future.add_done_callback(self.notification_callback)
         return task
 
     def do_query(self, task):
@@ -162,10 +176,9 @@ class JobQueue(object):
             return job.debug['stderr'] if job.debug else 'unkown error'
 
         # download
-        future = self.download_pool.submit(self.do_download, task, job)
-        future.task = task
-        future.add_done_callback(self.notification_callback)
-        return future
+        task.download_future = self.download_pool.submit(self.do_download, task, job)
+        task.download_future.task = task
+        task.download_future.add_done_callback(self.notification_callback)
 
     def do_download(self, task, job=None):
         task.status = 'downloading'
@@ -185,42 +198,49 @@ class JobQueue(object):
 
         # exceptions
         if exc is not None:
-            self.notify('You got an exception.  Try `{0}` for details.'.format(command),
-                        'error', "{0}: {1}".format(type(exc).__name__, exc))
+            title = type(exc).__name__
+            if task.name:
+                title = task.name + ': ' + title
+            self.post_message('error',
+                              'You got an exception.  Run `{0}` for details.'.format(command),
+                              "{0}\n{1}".format(title, exc))
             task.status = 'exception'
             task.notified = True
 
         # errors
         if task.status in ['error', 'killed']:
-            self.notify_tasks('Query failed.  Try `{0}` for details.'.format(command), [task])
+            self.post_task(task)
+            self.post_message('error', 'Query failed.  Run `{0}` for details.'.format(command))
             task.notified = True
 
-        # check the rest of tasks
-        notification_list = []
-        for task in [task for task in self.tasks if not task.notified]:
-            # don't notify if there are pending or running tasks
-            if task.future is None or not task.future.done():
+        # success
+        if task.status in ['downloaded']:
+            self.post_task(task)
+
+        # don't notify if there are pending or running tasks
+        for task in self.tasks:
+            if not task.done():
                 return
-            notification_list.append(task)
 
         # all tasks are done
+        notification_list = [task for task in self.tasks if not task.notified]
         if len(notification_list) > 0:
             queue = "'{0}'".format(self.name) if self.name else 'Queued'
-            self.notify_tasks('{0} tasks completed.'.format(queue), notification_list)
+            self.post_message('info', '{0} jobs completed.'.format(queue))
             for task in notification_list:
                 task.notified = True
 
-    def notify(self, message, status, text):
+    def post_message(self, status, message, text=None):
         for notifier in self.notifiers:
             try:
-                notifier.notify(message, status, text)
+                notifier.post_message(status, message, text)
             except:
                 logger.error("%s", traceback.format_exc())
 
-    def notify_tasks(self, message, tasks):
+    def post_task(self, task):
         for notifier in self.notifiers:
             try:
-                notifier.notify_tasks(message, tasks)
+                notifier.post_task(task)
             except:
                 logger.error("%s", traceback.format_exc())
 

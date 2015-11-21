@@ -3,26 +3,34 @@ logger = logging.getLogger(__name__)
 
 
 class BaseNotifier(object):
-    def notify(self, message, status, text):
+    def post_message(self, status, message, text=None, notify=True):
         raise NotImplemented()
 
-    def notify_tasks(self, message, tasks):
+    def post_task(self, task, notify=False):
         raise NotImplemented()
 
 
 class LoggingNotifier(BaseNotifier):
     '''
-    Use logger for notifications.  This is not recommended because you will see
-    unexpected outputs during your interactive sessions caused by background threads.
+    Use Python logger for notifications.  This is not recommended because you will be
+    interrupted by outputs from background threads during your interactive sessions.
     '''
 
-    def notify(self, message, status, text):
+    def post_message(self, status, message, text=None, notify=True):
         if status == 'info':
-            logger.info("%s", text)
+            logger.info("%s", message)
+            if text:
+                logger.info("%s", text)
         elif status == 'warning':
-            logger.warning("%s", text)
+            logger.warning("%s", message)
+            if text:
+                logger.warning("%s", text)
         else:
-            logger.error("%s", text)
+            logger.error("%s", message)
+            if text:
+                logger.error("%s", text)
 
-    def notify_tasks(self, message, tasks):
-        pass
+    def post_task(self, task, notify=False):
+        # Don't confuse users by logging from background threads.
+        # Users should manually check queue status.
+        return
