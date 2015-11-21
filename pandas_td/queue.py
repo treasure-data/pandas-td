@@ -130,9 +130,6 @@ class JobQueue(object):
 
         # issue query
         client = task.engine.connection.get_client()
-        print(task.engine.database)
-        print(task.query)
-        print(params)
         job = client.query(task.engine.database, task.query, **params)
         task.status = 'queued'
         task.issued_at = self.now()
