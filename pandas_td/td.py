@@ -727,7 +727,7 @@ def _convert_time_column(frame, time_col=None, time_index=None):
             frame.rename(columns={time_col: 'time'}, inplace=True)
         col = frame['time']
         # convert python string to pandas datetime
-        if col.dtype.name == 'object' and len(col) > 0 and type(col[0]) in six.string_types:
+        if col.dtype.name == 'object' and len(col) > 0 and isinstance(col[0], six.string_types):
             col = pd.to_datetime(col)
         # convert pandas datetime to unixtime
         if col.dtype.name == 'datetime64[ns]':
