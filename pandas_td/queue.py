@@ -1,8 +1,10 @@
 import concurrent.futures
 import datetime
 import multiprocessing
+import importlib
 import os
 import pytz
+import re
 import traceback
 import tzlocal
 
@@ -11,6 +13,15 @@ import pandas as pd
 
 import logging
 logger = logging.getLogger(__name__)
+
+
+class BaseNotifier(object):
+    def notify(self, message, status, text):
+        raise NotImplemented()
+
+    def notify_tasks(self, message, tasks):
+        raise NotImplemented()
+
 
 class QueryTask(object):
     def __init__(self, query, engine, kwargs):
@@ -72,13 +83,25 @@ class JobQueue(object):
         self.tasks = []
         self.job_pool = concurrent.futures.ThreadPoolExecutor(max_workers=workers)
         self.download_pool = concurrent.futures.ThreadPoolExecutor(max_workers=multiprocessing.cpu_count())
-        # notifier
-        if 'TD_SLACK_WEBHOOK_URL' in os.environ:
-            from . import slack
-            self.notifier = slack.SlackNotifier()
+        self.notifier = self.get_notifier()
+
+    def get_notifier(self):
+        if 'TD_NOTIFIER_CLASS' in os.environ:
+            name = os.environ['TD_NOTIFIER_CLASS']
+        elif 'TD_HIPCHAT_APIKEY' in os.environ:
+            name = 'pandas_td.drivers.hipchat.HipchatNotifier'
+        elif 'TD_SLACK_WEBHOOK_URL' in os.environ:
+            name = 'pandas_td.drivers.slack.SlackNotifier'
         else:
-            self.notifier = None
-            logging.warning('no notification method configured')
+            logging.warning('no notification method defined')
+            return None
+        # load notifier
+        logger.info('initializing notifier: %s', name)
+        m = re.match('(.*)\\.([^.]+)', name)
+        if not m:
+            raise ImportError("import failed: {0}".format(name))
+        module = importlib.import_module(m.group(1))
+        return getattr(module, m.group(2))()
 
     def __getitem__(self, i):
         return self.tasks[i]

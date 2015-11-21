@@ -3,7 +3,9 @@ import json
 import os
 import requests
 
-class SlackNotifier(object):
+from pandas_td.queue import BaseNotifier
+
+class SlackNotifier(BaseNotifier):
     def __init__(self):
         self.webhook_url = os.environ['TD_SLACK_WEBHOOK_URL']
         self.targets = os.environ.get('TD_SLACK_TARGETS')
