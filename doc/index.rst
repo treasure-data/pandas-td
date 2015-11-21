@@ -6,7 +6,7 @@
 Pandas-TD documentation
 =======================
 
-Interactive data analysis with `Treasure Data <https://www.treasuredta.com/>`_.
+Interactive data analysis in Python, using `Treasure Data <https://www.treasuredata.com/>`_ as data lake of time-series events, `Pandas <http://pandas.pydata.org/>`_ for local DataFrame operations, and `Jupyter <http://jupyter.org/>`_ to manage your interactive sessions.
 
 .. toctree::
    :caption: Getting Started
