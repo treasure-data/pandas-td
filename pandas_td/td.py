@@ -10,7 +10,6 @@ import warnings
 import zlib
 
 import msgpack
-import numpy as np
 import pandas as pd
 import requests
 import six
@@ -723,14 +722,18 @@ def _convert_time_column(frame, time_col=None, time_index=None):
     if 'time' in frame.columns and time_col != 'time':
         raise ValueError('"time" column already exists')
     if time_col is not None:
+        # Use 'time_col' as time column
         if time_col != 'time':
             frame.rename(columns={time_col: 'time'}, inplace=True)
         col = frame['time']
-        if col.dtype != np.int64:
-            if col.dtype != np.dtype('datetime64[ns]'):
-                col = pd.to_datetime(col)
-            frame['time'] = col.astype(np.int64, copy=True) // (10 ** 9)
+        # convert python string to pandas datetime
+        if col.dtype.name == 'object' and len(col) > 0 and type(col[0]) in six.string_types:
+            col = pd.to_datetime(col)
+        # convert pandas datetime to unixtime
+        if col.dtype.name == 'datetime64[ns]':
+            frame['time'] = col.astype('int64') // (10 ** 9)
     elif time_index is not None:
+        # Use 'time_index' as time column
         if type(time_index) is bool or not isinstance(time_index, six.integer_types):
             raise TypeError('invalid type for time_index')
         if isinstance(frame.index, pd.MultiIndex):
@@ -740,10 +743,12 @@ def _convert_time_column(frame, time_col=None, time_index=None):
                 idx = frame.index
             else:
                 raise IndexError('list index out of range')
-        if idx.dtype != np.dtype('datetime64[ns]'):
+        if idx.dtype.name != 'datetime64[ns]':
             raise TypeError('index type must be datetime64[ns]')
-        frame['time'] = idx.astype(np.int64) // (10 ** 9)
+        # convert pandas datetime to unixtime
+        frame['time'] = idx.astype('int64') // (10 ** 9)
     else:
+        # Use current time as time column
         frame['time'] = int(time.time())
     return frame
 
@@ -765,7 +770,7 @@ def _convert_index_column(frame, index=None, index_label=None):
 def _convert_date_format(frame, date_format=None):
     if date_format is not None:
         def _convert(col):
-            if col.dtype == np.dtype('datetime64[ns]'):
+            if col.dtype.name == 'datetime64[ns]':
                 return col.apply(lambda x: x.strftime(date_format))
             return col
         frame = frame.apply(_convert)

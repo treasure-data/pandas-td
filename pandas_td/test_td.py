@@ -18,6 +18,7 @@ import datetime
 import gzip
 import io
 import os
+import time
 import msgpack
 import tdclient
 import numpy as np
@@ -454,31 +455,49 @@ class ToTdTestCase(TestCase):
         f2 = _convert_time_column(f1)
 
     def test_time_now(self):
+        now = int(time.time())
         f1 = pd.DataFrame([['a', 1], ['b', 2]], columns=['x', 'y'])
         f2 = _convert_time_column(f1)
         eq_(list(f2.columns), ['x', 'y', 'time'])
+        time_val = f2.ix[0, 'time']
+        ok_((now - 1 < time_val) and (time_val < now + 1))
 
     def test_time_col_rename(self):
-        f1 = pd.DataFrame([[0, 'a', 1], [0, 'b', 2]], columns=['unixtime', 'x', 'y'])
+        f1 = pd.DataFrame([[978307200, 'a', 1], [978307200, 'b', 2]], columns=['unixtime', 'x', 'y'])
         f2 = _convert_time_column(f1, time_col='unixtime')
         eq_(list(f2.columns), ['time', 'x', 'y'])
+        eq_(list(f2['time'].values), [978307200, 978307200])
 
     def test_time_col_by_unixtime(self):
-        f1 = pd.DataFrame([[0, 'a', 1], [0, 'b', 2]], columns=['time', 'x', 'y'])
+        f1 = pd.DataFrame([[978307200, 'a', 1], [978307200, 'b', 2]], columns=['time', 'x', 'y'])
         f2 = _convert_time_column(f1, time_col='time')
         eq_(list(f2.columns), ['time', 'x', 'y'])
+        eq_(list(f2['time'].values), [978307200, 978307200])
+
+    def test_time_col_by_unixtime_substituted(self):
+        # issue #3
+        f1 = pd.DataFrame(index=range(2), columns=['time', 'x', 'y'])
+        for i in range(len(f1)):
+            f1['time'][i] = 978307200
+            f1['x'][i] = 'a'
+            f1['y'][i] = i
+        f2 = _convert_time_column(f1, time_col='time')
+        eq_(list(f2.columns), ['time', 'x', 'y'])
+        eq_(list(f2['time'].values), [978307200, 978307200])
 
     def test_time_col_by_datetime(self):
         f1 = pd.DataFrame([['a', 1], ['b', 2]], columns=['x', 'y'])
         f1['time'] = pd.to_datetime('2001-01-01')
         f2 = _convert_time_column(f1, time_col='time')
         eq_(list(f2.columns), ['x', 'y', 'time'])
+        eq_(list(f2['time'].values), [978307200, 978307200])
 
     def test_time_col_by_string(self):
         f1 = pd.DataFrame([['a', 1], ['b', 2]], columns=['x', 'y'])
         f1['time'] = '2001-01-01'
         f2 = _convert_time_column(f1, time_col='time')
         eq_(list(f2.columns), ['x', 'y', 'time'])
+        eq_(list(f2['time'].values), [978307200, 978307200])
 
     # time_index
 
