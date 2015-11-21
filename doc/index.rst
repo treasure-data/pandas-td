@@ -6,7 +6,7 @@
 Pandas-TD documentation
 =======================
 
-Interactive data analysis in Python, using `Treasure Data <https://www.treasuredata.com/>`_ as data lake of time-series events, `Pandas <http://pandas.pydata.org/>`_ for local DataFrame operations, and `Jupyter <http://jupyter.org/>`_ to manage your interactive sessions.
+Pandas-TD is a Python library for interactive data analysis, using `Treasure Data <https://www.treasuredata.com/>`_ as a data lake of time-series events, `Pandas <http://pandas.pydata.org/>`_ for local DataFrame operations, and `Jupyter <http://jupyter.org/>`_ to manage your analysis sessions.
 
 .. toctree::
    :caption: Getting Started
@@ -17,9 +17,9 @@ Interactive data analysis in Python, using `Treasure Data <https://www.treasured
 
 .. toctree::
    :caption: Advanced Topics
-   :maxdepth: 1
+   :maxdepth: 2
 
-   slack
+   notifications
 
 Indices and tables
 ==================
