@@ -43,16 +43,16 @@ class SlackNotifier(BaseNotifier):
             }
         self.post(message, attachment=attachment, notify=notify)
 
-    def post_task(self, task, notify=False):
-        job = task.job
+    def post_session(self, session, notify=False):
+        job = session.job
         status = job.status()
-        if task.name:
-            task_name = "{0}: Job ID {1}".format(task.name, task.job_id)
+        if session.name:
+            title = "{0}: Job ID {1} {2}".format(session.name, session.job_id, status)
         else:
-            task_name = "Job ID {0}".format(task.job_id)
+            title = "Job ID {0} {1}".format(session.job_id, status)
         params = {
-            'fallback': '{0} {1}'.format(task_name, status),
-            'title': '{0} {1}'.format(task_name, status),
+            'fallback': title,
+            'title': title,
             'title_link': job.url,
             # the first line of query
             'text': job.query.split('\n')[0],
@@ -64,11 +64,11 @@ class SlackNotifier(BaseNotifier):
             params['author_icon'] = 'http://www.gravatar.com/avatar/' + digest
         fields = []
         # duration
-        if task.job_start_at:
-            job_duration = task.job_end_at - task.job_start_at
+        if session.job_start_at:
+            job_duration = session.job_end_at - session.job_start_at
             fields.append({
                 'title': 'Job Start',
-                'value': str(task.job_start_at),
+                'value': str(session.job_start_at),
                 'short': True,
             })
             fields.append({
@@ -77,11 +77,11 @@ class SlackNotifier(BaseNotifier):
                 'short': True,
             })
         # download
-        if task.download_start_at and task.download_end_at:
-            download_duration = task.download_end_at - task.download_start_at
+        if session.download_start_at and session.download_end_at:
+            download_duration = session.download_end_at - session.download_start_at
             fields.append({
                 'title': 'Download Start',
-                'value': str(task.download_start_at),
+                'value': str(session.download_start_at),
                 'short': True,
             })
             fields.append({

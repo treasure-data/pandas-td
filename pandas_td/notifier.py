@@ -6,7 +6,7 @@ class BaseNotifier(object):
     def post_message(self, status, message, text=None, notify=True):
         raise NotImplemented()
 
-    def post_task(self, task, notify=False):
+    def post_session(self, session, notify=False):
         raise NotImplemented()
 
 
@@ -30,7 +30,7 @@ class LoggingNotifier(BaseNotifier):
             if text:
                 logger.error("%s", text)
 
-    def post_task(self, task, notify=False):
+    def post_session(self, session, notify=False):
         # Don't confuse users by logging from background threads.
         # Users should manually check queue status.
         return

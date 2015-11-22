@@ -53,17 +53,17 @@ class HipChatNotifier(BaseNotifier):
             self.post(text, card=card, color=COLORS[status])
         self.post(message, color=COLORS[status], notify=notify)
 
-    def post_task(self, task, notify=False):
-        job = task.job
+    def post_session(self, session, notify=False):
+        job = session.job
         status = job.status()
-        if task.name:
-            task_name = "{0}: Job ID {1}".format(task.name, task.job_id)
+        if session.name:
+            title = "{0}: Job ID {1} {2}".format(session.name, session.job_id, status)
         else:
-            task_name = "Job ID {0}".format(task.job_id)
+            title = "Job ID {0} {1}".format(session.job_id, status)
         params = {
             'style': 'application',
             'format': 'medium',
-            'title': '{0} {1}'.format(task_name, status),
+            'title': title,
             'url': job.url,
             # the first line of query
             'description': job.query.split('\n')[0],
@@ -74,22 +74,22 @@ class HipChatNotifier(BaseNotifier):
             params['icon'] = {'url': 'http://www.gravatar.com/avatar/' + digest}
         attributes = []
         # duration
-        if task.job_start_at:
-            job_duration = task.job_end_at - task.job_start_at
+        if session.job_start_at:
+            job_duration = session.job_end_at - session.job_start_at
             attributes.append({
                 'label': 'Job Start',
-                'value': {'label': str(task.job_start_at), 'style': 'lozenge'},
+                'value': {'label': str(session.job_start_at), 'style': 'lozenge'},
             })
             attributes.append({
                 'label': 'Duration',
                 'value': {'label': str(job_duration), 'style': 'lozenge'},
             })
         # download
-        if task.download_start_at and task.download_end_at:
-            download_duration = task.download_end_at - task.download_start_at
+        if session.download_start_at and session.download_end_at:
+            download_duration = session.download_end_at - session.download_start_at
             attributes.append({
                 'label': 'Download Start',
-                'value': {'label': str(task.download_start_at), 'style': 'lozenge'},
+                'value': {'label': str(session.download_start_at), 'style': 'lozenge'},
             })
             attributes.append({
                 'label': 'Duration',
