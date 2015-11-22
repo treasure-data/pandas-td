@@ -145,11 +145,11 @@ class QueryMagics(TDMagics):
     def push_code(self, code, end='\n'):
         self.code_list.append(code + end)
 
-    def get_code_block(self):
+    def display_code_block(self):
         html = '<pre style="background-color: #ffe;">'
         html += ''.join(self.code_list)
         html += '</pre>\n'
-        return html
+        IPython.display.display(IPython.display.HTML(html))
 
     def build_query(self, cell):
         ip = get_ipython()
@@ -179,15 +179,39 @@ class QueryMagics(TDMagics):
             self.push_code("_e = td.create_engine({0})".format(', '.join(args)))
             return td.create_engine(name, con=self.context.connect(), **params)
 
-    def build_queue(self, engine, args):
+    def build_queue(self, args):
         ip = get_ipython()
-        self.push_code("{0} = td.create_queue(_e, name='{0}')".format(args.queue))
-        queue = td.create_queue(engine, name=args.queue)
+        self.push_code("{0} = td.create_queue(name='{0}')".format(args.queue))
         if not args.dry_run:
+            queue = td.create_queue(name=args.queue)
             ip.push({args.queue: queue})
-        return queue
+            return queue
 
-    def pivot_table(self, d):
+    def queue_query(self, query, engine, args):
+        ip = get_ipython()
+        try:
+            queue = ip.ev(args.queue)
+        except NameError:
+            queue = self.build_queue(args)
+        self.push_code("{0}.query(_q, _e)".format(args.queue))
+        if args.dry_run:
+            return self.display_code_block()
+        name = "In[{0}]".format(ip.ev("len(In) - 1"))
+        def query_callback(d):
+            return self.post_process(d, args)
+        task = queue.query(query, engine, name=name, callback=query_callback)
+        print('Queued as {0}[{1}]'.format(args.queue, task.index))
+
+    def convert_time(self, d):
+        if 'time' in d.columns:
+            if d['time'].dtype == np.dtype('O'):
+                self.push_code("_d['time'] = pd.to_datetime(_d['time'])")
+                d['time'] = pd.to_datetime(d['time'])
+            else:
+                self.push_code("_d['time'] = pd.to_datetime(_d['time'], unit='s')")
+                d['time'] = pd.to_datetime(d['time'], unit='s')
+
+    def pivot(self, d):
         def is_dimension(c, t):
             return c.endswith('_id') or t == np.dtype('O')
         index = d.columns[0]
@@ -201,66 +225,18 @@ class QueryMagics(TDMagics):
             dimension = dimension[0]
         if len(measure) == 1:
             measure = measure[0]
-        self.push_code("_d = _d.pivot_table({0}, {1}, {2})".format(repr(measure), repr(index), repr(dimension)))
-        return d.pivot_table(measure, index, dimension)
+        self.push_code("_d = _d.pivot({0}, {1}, {2})".format(repr(index), repr(dimension), repr(measure)))
+        return d.pivot(index, dimension, measure)
 
-    def run_query(self, engine_type, line, cell):
-        ip = get_ipython()
-
-        try:
-            args = self.parse_args(engine_type, line)
-        except SystemExit:
-            return
-
-        queue = None
-        if args.queue:
-            try:
-                queue = ip.ev(args.queue)
-            except NameError:
-                pass
-
-        self.code_list = []
-        self.push_code("# translated code")
-
-        # query
-        query = self.build_query(cell)
-
-        # engine
-        if queue is None:
-            engine = self.build_engine(engine_type, args)
-
-        # queue
-        if args.queue:
-            if queue is None:
-                queue = self.build_queue(engine, args)
-            self.push_code("{0}.query(_q)".format(args.queue))
-            if args.dry_run:
-                IPython.display.display(IPython.display.HTML(self.get_code_block()))
-                return
-            name = "In[{0}]".format(ip.ev("len(In) - 1"))
-            task = queue.query(query, name=name)
-            print('Queued as {0}[{1}]'.format(args.queue, task.task_id))
-            return
-
-        # read_td_query
-        self.push_code("_d = td.read_td_query(_q, _e)")
-        if args.dry_run:
-            IPython.display.display(IPython.display.HTML(self.get_code_block()))
-            return
-        d = td.read_td_query(query, engine)
+    def post_process(self, d, args):
+        ip = IPython.get_ipython()
 
         # convert 'time' to datetime
-        if 'time' in d.columns:
-            if d['time'].dtype == np.dtype('O'):
-                self.push_code("_d['time'] = pd.to_datetime(_d['time'])")
-                d['time'] = pd.to_datetime(d['time'])
-            else:
-                self.push_code("_d['time'] = pd.to_datetime(_d['time'], unit='s')")
-                d['time'] = pd.to_datetime(d['time'], unit='s')
+        self.convert_time(d)
 
         # pivot_table
         if args.pivot:
-            d = self.pivot_table(d)
+            d = self.pivot(d)
         elif 'time' in d.columns:
             self.push_code("_d.set_index('time', inplace=True)")
             d.set_index('time', inplace=True)
@@ -289,10 +265,35 @@ class QueryMagics(TDMagics):
             r = d.plot()
         elif r is not None:
             self.push_code("_d")
+        return r
+
+    def run_query(self, engine_type, line, cell):
+        ip = get_ipython()
+
+        try:
+            args = self.parse_args(engine_type, line)
+        except SystemExit:
+            return
+
+        self.code_list = []
+        self.push_code("# translated code")
+        query = self.build_query(cell)
+        engine = self.build_engine(engine_type, args)
+
+        # queue
+        if args.queue:
+            return self.queue_query(query, engine, args)
+
+        # read_td_query
+        self.push_code("_d = td.read_td_query(_q, _e)")
+        if args.dry_run:
+            return self.display_code_block()
+        d = td.read_td_query(query, engine)
 
         # output
+        r = self.post_process(d, args)
         if args.verbose:
-            IPython.display.display(IPython.display.HTML(self.get_code_block()))
+            self.display_code_block()
         return r
 
     @magic.cell_magic
