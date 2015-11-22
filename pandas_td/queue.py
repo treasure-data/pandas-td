@@ -17,13 +17,12 @@ logger = logging.getLogger(__name__)
 
 
 class Session(object):
-    def __init__(self, query, engine, kwargs):
-        self.query = query
+    def __init__(self, engine, name=None, callback=None):
         self.engine = engine
-        self.kwargs = kwargs
         self.index = None
-        self.name = None
-        self.status = None
+        self.name = name
+        self.callback = callback
+        self.status = 'pending'
         self.created_at = None
         self.issued_at = None
         self.job_id = None
@@ -33,7 +32,6 @@ class Session(object):
         self.download_start_at = None
         self.download_end_at = None
         self.download_future = None
-        self.callback = None
         self.notified = False
 
     @property
@@ -106,7 +104,7 @@ class JobQueue(object):
         logger.info('initializing notifier: %s', name)
         m = re.match('(.*)\\.([^.]+)', name)
         if not m:
-            raise ImportError("import failed: {0}".format(name))
+            raise ImportError("invalid name: {0}".format(name))
         module = importlib.import_module(m.group(1))
         return getattr(module, m.group(2))()
 
@@ -123,44 +121,38 @@ class JobQueue(object):
         return pd.DataFrame([session.to_dict() for session in self.sessions],
                             columns=['created_at', 'status', 'job_id'])
 
-    def query(self, query, engine, name=None, callback=None, **kwargs):
-        session = Session(query, engine, kwargs)
+    def submit_query(self, query, engine, name=None, callback=None, **kwargs):
+        session = Session(engine, name=name, callback=callback)
         session.index = len(self.sessions)
-        session.name = name
-        session.status = 'pending'
-        session.callback = callback
         session.created_at = self.now()
         self.sessions.append(session)
         # schedule query
-        session.job_future = self.job_pool.submit(self.do_query, session)
+        session.job_future = self.job_pool.submit(self.do_query, session, query, kwargs)
         session.job_future.session = session
         session.job_future.add_done_callback(self.notification_callback)
         return session
 
-    def download(self, job_id, engine, name=None, callback=None, **kwargs):
-        job = self.get_client().job(job_id)
-        session = Session(job.query, engine, kwargs)
+    def submit_job(self, job_id, engine, name=None, callback=None):
+        job = engine.connection.client.job(job_id)
+        session = Session(engine, name=name, callback=callback)
         session.index = len(self.sessions)
-        session.name = name
-        session.job_id = job_id
-        session.status = 'pending'
-        session.callback = callback
         session.created_at = self.now()
         self.sessions.append(session)
         # schedule download
+        session.job_id = job_id
         session.download_future = self.download_pool.submit(self.do_download, session, job)
         session.download_future.session = session
         session.download_future.add_done_callback(self.notification_callback)
         return session
 
-    def do_query(self, session):
+    def do_query(self, session, query, kwargs):
         # parameters
         params = session.engine._params.copy()
-        params.update(session.kwargs)
+        params.update(kwargs)
 
         # issue query
         client = session.engine.connection.get_client()
-        job = client.query(session.engine.database, session.query, **params)
+        job = client.query(session.engine.database, query, **params)
         session.status = 'queued'
         session.issued_at = self.now()
         session.job_id = job.job_id
@@ -180,7 +172,7 @@ class JobQueue(object):
         session.download_future.session = session
         session.download_future.add_done_callback(self.notification_callback)
 
-    def do_download(self, session, job=None):
+    def do_download(self, session, job):
         session.status = 'downloading'
         session.download_start_at = self.now()
         r = session.engine.get_result(job, wait=True)

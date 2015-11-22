@@ -187,7 +187,7 @@ class QueryMagics(TDMagics):
             ip.push({args.queue: queue})
             return queue
 
-    def queue_query(self, query, engine, args):
+    def submit_query(self, query, engine, args):
         ip = get_ipython()
         try:
             queue = ip.ev(args.queue)
@@ -199,7 +199,7 @@ class QueryMagics(TDMagics):
         name = "In[{0}]".format(ip.ev("len(In) - 1"))
         def query_callback(d):
             return self.post_process(d, args)
-        task = queue.query(query, engine, name=name, callback=query_callback)
+        task = queue.submit_query(query, engine, name=name, callback=query_callback)
         print('Queued as {0}[{1}]'.format(args.queue, task.index))
 
     def convert_time(self, d):
@@ -282,7 +282,7 @@ class QueryMagics(TDMagics):
 
         # queue
         if args.queue:
-            return self.queue_query(query, engine, args)
+            return self.submit_query(query, engine, args)
 
         # read_td_query
         self.push_code("_d = td.read_td_query(_q, _e)")
