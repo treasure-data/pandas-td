@@ -1,5 +1,9 @@
 # Version History
 
+## 0.8.7 (2015-11-23)
+
+* Several bug fixes of to_td().
+
 ## 0.8.6 (2015-11-12)
 
 * to_td() now waits until imported data becomes visible.  It also prints progress in HTML.
