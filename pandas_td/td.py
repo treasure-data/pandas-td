@@ -334,6 +334,7 @@ class StreamingUploader(object):
         if self.uploaded_at is not None:
             html += self._html_text('upload finished at {0}Z'.format(self.uploaded_at.isoformat()))
         if self.imported_count is not None:
+            html += "waiting until the data become visible...<br>\n"
             html += "Imported: {:,} / ".format(self.imported_count)
             html += "{:,} records".format(self.frame_size)
             html += " (%.2f%%)<br>\n" % (self.imported_count * 100.0 / self.frame_size)
