@@ -12,19 +12,18 @@ class HipChatNotifier(BaseNotifier):
         self.token = os.environ['TD_HIPCHAT_TOKEN']
         self.targets = os.environ.get('TD_HIPCHAT_TARGETS')
 
-    def post(self, message=None, card=None, color=None, notify=False):
+    def post(self, message, card=None, color=None, notify=False):
         params = {
             'notify': notify,
         }
         if self.author:
             params['from'] = self.author[:25]
-        if message:
-            if self.targets:
-                message = self.targets + ': ' + message
-            params['message'] = message
-            params['message_format'] = 'text'
-        else:
-            params['message'] = 'attached:'
+        if notify and self.targets:
+            message = self.targets + ': ' + message
+        if card:
+            message += '\n[card attached]'
+        params['message'] = message
+        params['message_format'] = 'text'
         if card:
             card['id'] = uuid.uuid4().urn
             params['card'] = card
@@ -51,8 +50,8 @@ class HipChatNotifier(BaseNotifier):
                 'title': text.split('\n')[0],
                 'description': '\n'.join(text.split('\n')[1:]),
             }
-            self.post(card=card, color=COLORS[status])
-        self.post(message=message, color=COLORS[status], notify=notify)
+            self.post(text, card=card, color=COLORS[status])
+        self.post(message, color=COLORS[status], notify=notify)
 
     def post_task(self, task, notify=False):
         job = task.job
@@ -105,4 +104,4 @@ class HipChatNotifier(BaseNotifier):
         else:
             color = 'red'
             params['description'] = job.debug['stderr']
-        self.post(card=params, color=color)
+        self.post(params['title'], card=params, color=color)
