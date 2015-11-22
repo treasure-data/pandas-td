@@ -19,6 +19,7 @@ Pandas-TD is a Python library for interactive data analysis, using `Treasure Dat
    :caption: Advanced Topics
    :maxdepth: 2
 
+   jobqueues
    notifications
 
 Indices and tables
