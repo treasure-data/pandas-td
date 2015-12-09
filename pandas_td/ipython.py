@@ -114,10 +114,10 @@ class QueryMagics(TDMagics):
                             help='output translated code without running query')
         parser.add_argument('-v', '--verbose', action='store_true',
                             help='verbose output')
-        parser.add_argument('-e', '--engine',
-                            help='use specified engine')
         parser.add_argument('-a', '--queue',
                             help='run asynchronously using a queue')
+        parser.add_argument('-c', '--connection',
+                            help='use specified connection')
         parser.add_argument('-o', '--out',
                             help='store the result to variable')
         parser.add_argument('-O', '--out-file',
@@ -161,23 +161,24 @@ class QueryMagics(TDMagics):
 
     def build_engine(self, engine_type, args):
         ip = get_ipython()
-        if args.engine:
-            # Use the existing one
-            engine = ip.ev(args.engine)
-            self.push_code("_e = {0}".format(args.engine))
-            return engine
+        name = '{}:{}'.format(engine_type, args.database)
+        code_args = [repr(name)]
+        # connection
+        if args.connection:
+            con = ip.ev(args.connection)
+            code_args.append('con={}'.format(args.connection))
         else:
-            # Create a new one
-            name = '{0}:{1}'.format(engine_type, args.database)
-            if args.quiet:
-                params = {'show_progress': False, 'clear_progress': False}
-            elif args.verbose:
-                params = {'show_progress': True, 'clear_progress': False}
-            else:
-                params = {}
-            args = [repr(name)] + ['{0}={1}'.format(k, v) for k, v in params.items()]
-            self.push_code("_e = td.create_engine({0})".format(', '.join(args)))
-            return td.create_engine(name, con=self.context.connect(), **params)
+            con = self.context.connect()
+        # engine
+        if args.quiet:
+            params = {'show_progress': False, 'clear_progress': False}
+        elif args.verbose:
+            params = {'show_progress': True, 'clear_progress': False}
+        else:
+            params = {}
+        code_args += ['{}={}'.format(k, v) for k, v in params.items()]
+        self.push_code("_e = td.create_engine({})".format(', '.join(code_args)))
+        return td.create_engine(name, con=con, **params)
 
     def build_queue(self, args):
         ip = get_ipython()
