@@ -7,6 +7,7 @@ import sys
 import numpy as np
 import pandas as pd
 import pandas_td as td
+import pytz
 import tdclient
 
 import IPython
@@ -124,11 +125,17 @@ class QueryMagics(TDMagics):
                             help='store the result to file')
         parser.add_argument('-q', '--quiet', action='store_true',
                             help='disable progress output')
+        parser.add_argument('-T', '--timezone',
+                            help='set timezone to time index')
         return parser
 
     def parse_args(self, engine_type, line):
         parser = self.create_parser(engine_type)
         args = parser.parse_args(line.split())
+
+        # validate timezone
+        if args.timezone:
+            _ = pytz.timezone(args.timezone)
 
         # implicit options
         if args.queue:
@@ -212,15 +219,22 @@ class QueryMagics(TDMagics):
                 self.push_code("_d['time'] = pd.to_datetime(_d['time'], unit='s')")
                 d['time'] = pd.to_datetime(d['time'], unit='s')
 
-    def pivot(self, d):
+    def set_index(self, d, index, args):
+        self.push_code("_d.set_index({}, inplace=True)".format(repr(index)))
+        d.set_index(index, inplace=True)
+        if index == 'time' and args.timezone:
+            self.push_code("_d.tz_localize('UTC', copy=False)")
+            self.push_code("_d.tz_convert('{}', copy=False)".format(args.timezone))
+            d.tz_localize('UTC', copy=False).tz_convert(args.timezone, copy=False)
+
+    def pivot(self, d, args):
         def is_dimension(c, t):
             return c.endswith('_id') or t == np.dtype('O')
         index = d.columns[0]
         dimension = [c for c, t in zip(d.columns[1:], d.dtypes[1:]) if is_dimension(c, t)]
         measure = [c for c, t in zip(d.columns[1:], d.dtypes[1:]) if not is_dimension(c, t)]
         if len(dimension) == 0:
-            self.push_code("_d.set_index({0}, inplace=True)".format(repr(index)))
-            d.set_index(index, inplace=True)
+            self.set_index(d, index, args)
             return d
         if len(dimension) == 1:
             dimension = dimension[0]
@@ -237,10 +251,9 @@ class QueryMagics(TDMagics):
 
         # pivot_table
         if args.pivot:
-            d = self.pivot(d)
+            d = self.pivot(d, args)
         elif 'time' in d.columns:
-            self.push_code("_d.set_index('time', inplace=True)")
-            d.set_index('time', inplace=True)
+            self.set_index(d, 'time', args)
 
         # return value
         r = d
