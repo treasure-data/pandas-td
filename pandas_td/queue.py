@@ -123,6 +123,10 @@ class JobQueue(object):
         return pd.DataFrame([session.to_dict() for session in self.sessions],
                             columns=['created_at', 'status', 'job_id'])
 
+    def wait(self):
+        self.job_pool.shutdown()
+        self.download_pool.shutdown()
+
     def submit_query(self, query, engine, name=None, callback=None, **kwargs):
         session = Session(engine, name=name, callback=callback)
         session.index = len(self.sessions)
