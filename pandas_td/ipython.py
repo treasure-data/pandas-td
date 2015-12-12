@@ -100,7 +100,52 @@ class UseMagics(TDMagics):
 
 @magic.magics_class
 class QueryMagics(TDMagics):
-    def create_parser(self, engine_type):
+    def create_job_parser(self):
+        parser = argparse.ArgumentParser(
+            prog = 'job',
+            description = 'Line magic to get job result.',
+            add_help = False)
+        parser.add_argument('job_id', type=int,
+                            help='job ID')
+        parser.add_argument('--pivot', action='store_true',
+                            help='run pivot_table against dimensions')
+        parser.add_argument('--plot', action='store_true',
+                            help='plot the query result')
+        parser.add_argument('-n', '--dry-run', action='store_true',
+                            help='output translated code without running query')
+        parser.add_argument('-v', '--verbose', action='store_true',
+                            help='verbose output')
+        parser.add_argument('-a', '--queue',
+                            help='run asynchronously using a queue')
+        parser.add_argument('-c', '--connection',
+                            help='use specified connection')
+        parser.add_argument('-o', '--out',
+                            help='store the result to variable')
+        parser.add_argument('-O', '--out-file',
+                            help='store the result to file')
+        parser.add_argument('-q', '--quiet', action='store_true',
+                            help='disable progress output')
+        parser.add_argument('-T', '--timezone',
+                            help='set timezone to time index')
+        return parser
+
+    def parse_job_args(self, line):
+        parser = self.create_job_parser()
+        args = parser.parse_args(line.split())
+
+        # validate timezone
+        if args.timezone:
+            _ = pytz.timezone(args.timezone)
+
+        # implicit options
+        if args.queue:
+            args.quiet = True
+        if args.plot:
+            args.pivot = True
+
+        return args
+
+    def create_query_parser(self, engine_type):
         parser = argparse.ArgumentParser(
             prog = engine_type,
             description = 'Cell magic to run a query.',
@@ -129,8 +174,8 @@ class QueryMagics(TDMagics):
                             help='set timezone to time index')
         return parser
 
-    def parse_args(self, engine_type, line):
-        parser = self.create_parser(engine_type)
+    def parse_query_args(self, engine_type, line):
+        parser = self.create_query_parser(engine_type)
         args = parser.parse_args(line.split())
 
         # validate timezone
@@ -166,9 +211,9 @@ class QueryMagics(TDMagics):
         self.push_code("'''")
         return query
 
-    def build_engine(self, engine_type, args):
+    def build_engine(self, engine_type, database, args):
         ip = get_ipython()
-        name = '{}:{}'.format(engine_type, args.database)
+        name = '{}:{}'.format(engine_type, database)
         code_args = [repr(name)]
         # connection
         if args.connection:
@@ -194,6 +239,21 @@ class QueryMagics(TDMagics):
             queue = td.create_queue(name=args.queue)
             ip.push({args.queue: queue})
             return queue
+
+    def submit_job(self, job_id, con, args):
+        ip = get_ipython()
+        try:
+            queue = ip.ev(args.queue)
+        except NameError:
+            queue = self.build_queue(args)
+        self.push_code("{}.job({})".format(args.queue, job_id))
+        if args.dry_run:
+            return self.display_code_block()
+        name = "In[{0}]".format(ip.ev("len(In) - 1"))
+        def job_callback(d):
+            return self.post_process(d, args)
+        task = queue.submit_job(job_id, con, name=name, callback=job_callback)
+        print('Queued as {0}[{1}]'.format(args.queue, task.index))
 
     def submit_query(self, query, engine, args):
         ip = get_ipython()
@@ -281,18 +341,58 @@ class QueryMagics(TDMagics):
             self.push_code("_d")
         return r
 
+    def run_job(self, line):
+        ip = get_ipython()
+
+        try:
+            args = self.parse_job_args(line)
+        except SystemExit:
+            return
+
+        self.code_list = []
+        self.push_code("# translated code")
+        if args.connection:
+            con = ip.ev(args.connection)
+        else:
+            con = self.context.connect()
+
+        # queue
+        if args.queue:
+            return self.submit_job(args.job_id, con, args)
+
+        # engine
+        job = con.client.job(args.job_id)
+        if hasattr(job, 'database'):
+            database = job.database
+        else:
+            # NOTE: tdclient <= 0.3.2 is broken
+            database = 'sample_datasets'
+        engine = self.build_engine(job.type, engine, args)
+
+        # read_td_query
+        self.push_code("_d = td.read_td_job({}, _e)".format(args.job_id))
+        if args.dry_run:
+            return self.display_code_block()
+        d = td.read_td_job(args.job_id, engine)
+
+        # output
+        r = self.post_process(d, args)
+        if args.verbose:
+            self.display_code_block()
+        return r
+
     def run_query(self, engine_type, line, cell):
         ip = get_ipython()
 
         try:
-            args = self.parse_args(engine_type, line)
+            args = self.parse_query_args(engine_type, line)
         except SystemExit:
             return
 
         self.code_list = []
         self.push_code("# translated code")
         query = self.build_query(cell)
-        engine = self.build_engine(engine_type, args)
+        engine = self.build_engine(engine_type, args.database, args)
 
         # queue
         if args.queue:
@@ -309,6 +409,10 @@ class QueryMagics(TDMagics):
         if args.verbose:
             self.display_code_block()
         return r
+
+    @magic.line_magic
+    def td_job(self, line):
+        return self.run_job(line)
 
     @magic.cell_magic
     def td_hive(self, line, cell):

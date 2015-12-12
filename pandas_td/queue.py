@@ -15,6 +15,8 @@ import pandas as pd
 import logging
 logger = logging.getLogger(__name__)
 
+from pandas_td.td import create_engine
+
 
 class Session(object):
     def __init__(self, engine, name=None, callback=None):
@@ -132,8 +134,13 @@ class JobQueue(object):
         session.job_future.add_done_callback(self.notification_callback)
         return session
 
-    def submit_job(self, job_id, engine, name=None, callback=None):
-        job = engine.connection.client.job(job_id)
+    def submit_job(self, job_id, con, name=None, callback=None):
+        job = con.client.job(job_id)
+        if hasattr(job, 'database'):
+            engine = create_engine('{}:{}'.format(job.type, job.database), con=con)
+        else:
+            # NOTE: tdclient <= 0.3.2 is broken
+            engine = create_engine('{}:{}'.format(job.type, 'sample_datasets'), con=con)
         session = Session(engine, name=name, callback=callback)
         session.index = len(self.sessions)
         session.created_at = self.now()
