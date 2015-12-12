@@ -1,5 +1,15 @@
 # Version History
 
+## 0.8.8 (2015-12-13)
+
+* New magic function %td_job.
+* New option --timezone (-T) for magic query functions.
+* New option --connection (-c) for magic query functions.
+* Deprecated option --engine (-e) for magic query functions.
+* (Experimental) New function ``create_queue`` for background job execution.
+* (Experimental) New option --queue (-a) for magic query functions.
+* Support HipChat and Slack as notification channel for background jobs.
+
 ## 0.8.7 (2015-11-23)
 
 * Several bug fixes of to_td().
