@@ -119,6 +119,8 @@ class QueryMagics(TDMagics):
                             help='run asynchronously using a queue')
         parser.add_argument('-c', '--connection',
                             help='use specified connection')
+        parser.add_argument('-d', '--dropna',
+                            help='drop columns if all values are NA')
         parser.add_argument('-o', '--out',
                             help='store the result to variable')
         parser.add_argument('-O', '--out-file',
@@ -164,6 +166,8 @@ class QueryMagics(TDMagics):
                             help='run asynchronously using a queue')
         parser.add_argument('-c', '--connection',
                             help='use specified connection')
+        parser.add_argument('-d', '--dropna', action='store_true',
+                            help='drop columns if all values are NA')
         parser.add_argument('-o', '--out',
                             help='store the result to variable')
         parser.add_argument('-O', '--out-file',
@@ -308,6 +312,11 @@ class QueryMagics(TDMagics):
 
         # convert 'time' to datetime
         self.convert_time(d)
+
+        # dropna by columns all
+        if args.dropna:
+            self.push_code("_d.dropna(axis='columns', how='all', inplace=True)")
+            d.dropna(axis='columns', how='all', inplace=True)
 
         # pivot_table
         if args.pivot:
