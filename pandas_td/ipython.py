@@ -371,12 +371,7 @@ class QueryMagics(TDMagics):
 
         # engine
         job = con.client.job(args.job_id)
-        if hasattr(job, 'database'):
-            database = job.database
-        else:
-            # NOTE: tdclient <= 0.3.2 is broken
-            database = 'sample_datasets'
-        engine = self.build_engine(job.type, engine, args)
+        engine = self.build_engine(job.type, job.database, args)
 
         # read_td_query
         self.push_code("_d = td.read_td_job({}, _e)".format(args.job_id))
