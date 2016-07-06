@@ -132,10 +132,10 @@ class QueryEngine(object):
         html += '</pre>\n'
         # progress
         progress = None
-        for progress in re.findall(r'\n(\d{4}-\d{2}-\d{2}.*(?:\n .*)+)', output):
+        for progress in re.findall(r'\n(\d{4}-\d{2}-\d{2}.*\n\d{8}.*(?:\n *\[\d+\].*)+)', output):
             pass
         if progress:
-            html += '<pre>{0}</pre>'.format(progress)
+            html += '<code><small><small>{0}</small></small></code>'.format(progress)
         # finished at
         for rows, finished in re.findall(r'\n(\d+ rows.*)\n(finished at.*)', output):
             html += '{0}<br>'.format(rows)
