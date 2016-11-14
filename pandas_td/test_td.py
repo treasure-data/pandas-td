@@ -326,14 +326,6 @@ class ReadTdTableTestCase(TestCase):
     def test_invalid_time_range(self):
         read_td_table('test_table', self.engine, time_range=(1.0, 2.0))
 
-    @raises(ValueError)
-    def test_invalid_sample_small(self):
-        read_td_table('test_table', self.engine, sample=-1)
-
-    @raises(ValueError)
-    def test_invalid_sample_large(self):
-        read_td_table('test_table', self.engine, sample=1.1)
-
     def test_default(self):
         read_td_table('test_table', self.engine)
         self.assert_query('''
@@ -364,15 +356,6 @@ LIMIT 10000
         self.assert_query('''
 SELECT c1, c2
 FROM test_table
-LIMIT 10000
-''')
-
-    def test_with_sample(self):
-        read_td_table('test_table', self.engine, sample=0.1)
-        self.assert_query('''
-SELECT *
-FROM test_table
-TABLESAMPLE BERNOULLI (10.0)
 LIMIT 10000
 ''')
 
