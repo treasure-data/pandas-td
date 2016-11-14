@@ -561,7 +561,7 @@ def read_td_job(job_id, engine, index_col=None, parse_dates=None):
     r = engine.get_result(job, wait=True)
     return r.to_dataframe(index_col=index_col, parse_dates=parse_dates)
 
-def read_td_table(table_name, engine, index_col=None, parse_dates=None, columns=None, time_range=None, sample=None, limit=10000):
+def read_td_table(table_name, engine, index_col=None, parse_dates=None, columns=None, time_range=None, limit=10000):
     '''Read Treasure Data table into a DataFrame.
 
     The number of returned rows is limited by "limit" (default 10,000).
@@ -586,9 +586,6 @@ def read_td_table(table_name, engine, index_col=None, parse_dates=None, columns=
     time_range : tuple (start, end), optional
         Limit time range to select. "start" and "end" are one of None, integers,
         strings or datetime objects. "end" is exclusive, not included in the result.
-    sample : double, optional
-        Enable sampling data (Presto only). 1.0 means all data (100 percent).
-        See TABLESAMPLE BERNOULLI at https://prestodb.io/docs/current/sql/select.html
     limit : int, default 10,000
         Maximum number of rows to select.
 
@@ -602,11 +599,6 @@ def read_td_table(table_name, engine, index_col=None, parse_dates=None, columns=
     query += "SELECT {0}\n".format('*' if columns is None else ', '.join(columns))
     # FROM
     query += "FROM {0}\n".format(table_name)
-    # TABLESAMPLE
-    if sample is not None:
-        if sample < 0 or sample > 1:
-            raise ValueError('sample must be between 0.0 and 1.0')
-        query += "TABLESAMPLE BERNOULLI ({0})\n".format(sample * 100)
     # WHERE
     if time_range is not None:
         start, end = time_range

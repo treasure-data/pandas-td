@@ -45,8 +45,8 @@ engine = td.create_engine('presto:sample_datasets')
 # Read Treasure Data query into a DataFrame.
 df = td.read_td('select * from www_access', engine)
 
-# Read Treasure Data table, sampling 5 percent of data, into a DataFrame.
-df = td.read_td_table('nasdaq', engine, sample=0.05, limit=10000)
+# Read Treasure Data table into a DataFrame.
+df = td.read_td_table('nasdaq', engine, limit=10000)
 
 # Write a DataFrame to a Treasure Data table.
 con = td.connect()
