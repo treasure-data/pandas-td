@@ -1,5 +1,9 @@
 # Version History
 
+## 0.9.0 (2018-08-31)
+
+* Tweaked dependency versions (#7, #8)
+
 ## 0.8.8 (2015-12-13)
 
 * New magic function %td_job.
