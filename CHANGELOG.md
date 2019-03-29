@@ -1,5 +1,9 @@
 # Version History
 
+## 0.10.0 (2019-03-29)
+
+* Set minimum requests version to 2.21.0 (#9)
+
 ## 0.9.0 (2018-08-31)
 
 * Tweaked dependency versions (#7, #8)
