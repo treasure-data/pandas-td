@@ -9,11 +9,11 @@ install:
 - pip install coveralls
 script: nosetests --with-coverage --cover-package pandas_td
 after_success: coveralls
-deploy:
-  provider: pypi
-  user: yyuu
-  password:
-    secure: e1A5qG2aKeuzYiknBu5WO2ZYq/yHOpcJXU1oKyZ1MfiDPCEwKII1gmnacNWrhljRJRANDB1cbHiW18yrlTwbIn36dLkKod26Y8N3o6d87U0aVNVOT76wnx7SL8Xx6KRkmMUglQ6n2f9bnq8zjzWblrM6dolVKAAWAEu3ayR6cK4Q/guM+qOa/j4EOSr8pzprYl76Sb6gFdOORR+YciYOq7GG7ZKHB/91o4rH2J57oxcTU9MwtsnLKjwPU51vyElgYNsL9u4Bho6+zldzAoxxPaKA4m3G6GbtaPsXGRtjsCzBI99u+G5TJKQqH07vu1ZCwGQhQhMdg6+KYzWFHurNnAYni39ZCFiuanlC1s2/h1qKH922kOZOoyDZWEj6Wv0275RMwGOUb0SUt/RWuWrcXyTPxz+tTgZUn8b4bwamHhaHJ4XBdzX6h1IrUdtB4T8dIYYyvjVSn8re0tHbvWY+lUUpEu6vczQWzHxWjEX7zz6W2om7/gp+AGeIyZQn/7HCk4GxVWef1BZT3Lo919wUbPjZIn9XnlJutccFEk9hdz7NSNgsScY3/tAXNDI8I3kaput4LWzni46Xne3u9bw/0WPZymxCQDcQUpdArahYHXMVgEzkvXzF2Nxs9KXoqf22lvtp2Yxb48H5iycwTQ73bsM/jwwF2OdvXRNQSypp3eQ=
-  on:
-    tags: true
-    repo: treasure-data/pandas-td
+#deploy:
+#  provider: pypi
+#  user: yyuu
+#  password:
+#    secure: e1A5qG2aKeuzYiknBu5WO2ZYq/yHOpcJXU1oKyZ1MfiDPCEwKII1gmnacNWrhljRJRANDB1cbHiW18yrlTwbIn36dLkKod26Y8N3o6d87U0aVNVOT76wnx7SL8Xx6KRkmMUglQ6n2f9bnq8zjzWblrM6dolVKAAWAEu3ayR6cK4Q/guM+qOa/j4EOSr8pzprYl76Sb6gFdOORR+YciYOq7GG7ZKHB/91o4rH2J57oxcTU9MwtsnLKjwPU51vyElgYNsL9u4Bho6+zldzAoxxPaKA4m3G6GbtaPsXGRtjsCzBI99u+G5TJKQqH07vu1ZCwGQhQhMdg6+KYzWFHurNnAYni39ZCFiuanlC1s2/h1qKH922kOZOoyDZWEj6Wv0275RMwGOUb0SUt/RWuWrcXyTPxz+tTgZUn8b4bwamHhaHJ4XBdzX6h1IrUdtB4T8dIYYyvjVSn8re0tHbvWY+lUUpEu6vczQWzHxWjEX7zz6W2om7/gp+AGeIyZQn/7HCk4GxVWef1BZT3Lo919wUbPjZIn9XnlJutccFEk9hdz7NSNgsScY3/tAXNDI8I3kaput4LWzni46Xne3u9bw/0WPZymxCQDcQUpdArahYHXMVgEzkvXzF2Nxs9KXoqf22lvtp2Yxb48H5iycwTQ73bsM/jwwF2OdvXRNQSypp3eQ=
+#  on:
+#    tags: true
+#    repo: treasure-data/pandas-td
