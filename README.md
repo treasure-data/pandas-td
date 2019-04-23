@@ -1,4 +1,8 @@
-# Pandas-TD
+**NOTICE: pandas-td will be no longer maintained after June, 2019. Use [pytd](https://github.com/takuti/pytd) instead.** 
+
+The alternative tool offers pandas-td-compatible functions that provide the same functionalities in a more efficient way.
+
+# Pandas-TD [deprecated]
 
 [![Build Status](https://travis-ci.org/treasure-data/pandas-td.svg?branch=master)](https://travis-ci.org/treasure-data/pandas-td)
 [![Code Health](https://landscape.io/github/treasure-data/pandas-td/master/landscape.svg?style=flat)](https://landscape.io/github/treasure-data/pandas-td/master)
