@@ -1,6 +1,6 @@
-**NOTICE: pandas-td will be no longer maintained after June, 2019. Use [pytd](https://github.com/treasure-data/pytd) instead.** 
+**NOTICE: pandas-td will be no longer maintained after June 2019. Use [pytd](https://github.com/treasure-data/pytd) instead.** 
 
-The alternative tool offers pandas-td-compatible functions that provide the same functionalities in a more efficient way.
+See a [guide to replacing pandas-td with pytd](https://github.com/treasure-data/pytd#how-to-replace-pandas-td) for more information.
 
 # Pandas-TD [deprecated]
 
