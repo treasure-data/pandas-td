@@ -1,4 +1,4 @@
-**NOTICE: pandas-td will be no longer maintained after June, 2019. Use [pytd](https://github.com/takuti/pytd) instead.** 
+**NOTICE: pandas-td will be no longer maintained after June, 2019. Use [pytd](https://github.com/treasure-data/pytd) instead.** 
 
 The alternative tool offers pandas-td-compatible functions that provide the same functionalities in a more efficient way.
 
