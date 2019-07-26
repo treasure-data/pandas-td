@@ -4,10 +4,9 @@ python:
 - '3.6'
 - '3.7'
 install:
-- pip install -r requirements.txt
-- pip install mock
+- pip install .[dev]
 - pip install coveralls
-script: nosetests --with-coverage --cover-package pandas_td
+script: pytest --cov=pandas_td
 after_success: coveralls
 #deploy:
 #  provider: pypi
