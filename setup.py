@@ -12,7 +12,6 @@ requires = [
     "certifi",
     "pytz",
     "tzlocal",
-    "futures>=3.0.3",
     "pandas>=0.16.0",
     "requests>=2.21.0",
     "td-client>=0.4.0",
