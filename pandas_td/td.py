@@ -731,7 +731,7 @@ def _convert_time_column(frame, time_col=None, time_index=None):
             frame['time'] = col.astype('int64') // (10 ** 9)
     elif time_index is not None:
         # Use 'time_index' as time column
-        if type(time_index) is bool or not isinstance(time_index, str):
+        if type(time_index) is bool or not isinstance(time_index, int):
             raise TypeError('invalid type for time_index')
         if isinstance(frame.index, pd.MultiIndex):
             idx = frame.index.levels[time_index]
