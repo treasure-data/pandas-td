@@ -403,10 +403,8 @@ class ToTdTestCase(TestCase):
     def test_fail_if_exists(self):
         client = self.connection.client
         client.table = MagicMock()
-        try:
+        with self.assertRaises(RuntimeError):
             to_td(self.frame, 'test_db.test_table', self.connection)
-        except RuntimeError:
-            pass
 
     def test_ok_if_not_exists(self):
         client = self.connection.client
@@ -440,10 +438,8 @@ class ToTdTestCase(TestCase):
 
     def test_error_time_column_already_exists(self):
         f1 = pd.DataFrame([[0, 'a', 1], [0, 'b', 2]], columns=['time', 'x', 'y'])
-        try:
+        with self.assertRaises(ValueError):
             f2 = _convert_time_column(f1)
-        except ValueError:
-            pass
 
     def test_time_now(self):
         now = int(time.time())
