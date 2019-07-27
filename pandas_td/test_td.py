@@ -99,11 +99,8 @@ class ConnectionConfigurationTestCase(TestCase):
         os.environ.update(self._environ)
 
     def test_error_without_parameters(self):
-        try:
+        with self.assertRaises(ValueError):
             Connection()
-            assert False
-        except ValueError:
-            pass
 
     def test_apikey(self):
         # parameter
@@ -198,11 +195,8 @@ class QueryEngineTestCase(TestCase):
         self.connection.client.query = MagicMock(return_value=job)
         # test
         engine = QueryEngine(self.connection, 'test_db')
-        try:
+        with self.assertRaises(RuntimeError):
             r = engine.execute('select 1')
-            assert False
-        except RuntimeError:
-            pass
 
 class ResultProxyTestCase(TestCase):
     def setUp(self):
@@ -325,11 +319,8 @@ class ReadTdTableTestCase(TestCase):
         self.connection.client.query.assert_called_with('test_db', "-- read_td_table('test_table')" + query, type='presto')
 
     def test_invalid_time_range(self):
-        try:
+        with self.assertRaises(ValueError):
             read_td_table('test_table', self.engine, time_range=(1.0, 2.0))
-            assert False
-        except ValueError:
-            pass
 
     def test_default(self):
         read_td_table('test_table', self.engine)
@@ -393,30 +384,21 @@ class ToTdTestCase(TestCase):
         self.frame = pd.DataFrame([[1,2],[3,4]], columns=['x', 'y'])
 
     def test_invalid_table_name(self):
-        try:
+        with self.assertRaises(ValueError):
             to_td(self.frame, 'invalid', self.connection)
-            assert False
-        except ValueError:
-            pass
 
     def test_datetime_is_not_supported(self):
         client = self.connection.client
         # test
         frame = pd.DataFrame({'timestamp': [datetime.datetime(2000,1,1)]})
-        try:
+        with self.assertRaises(TypeError):
             to_td(frame, 'test_db.test_table', self.connection)
-            assert False
-        except TypeError:
-            pass
 
     # if_exists
 
     def test_invalid_if_exists(self):
-        try:
+        with self.assertRaises(ValueError):
             to_td(self.frame, 'test_db.test_table', self.connection, if_exists='invalid')
-            assert False
-        except ValueError:
-            pass
 
     def test_fail_if_exists(self):
         client = self.connection.client
@@ -453,11 +435,8 @@ class ToTdTestCase(TestCase):
     # time_col
 
     def test_error_time_col_and_time_index(self):
-        try:
+        with self.assertRaises(ValueError):
             _convert_time_column(self.frame, time_col='x', time_index=0)
-            assert False
-        except ValueError:
-            pass
 
     def test_error_time_column_already_exists(self):
         f1 = pd.DataFrame([[0, 'a', 1], [0, 'b', 2]], columns=['time', 'x', 'y'])
@@ -516,28 +495,19 @@ class ToTdTestCase(TestCase):
     def test_invalid_arg_time_index(self):
         date_range = pd.date_range('2015-01-01', periods=2, freq='d')
         f1 = pd.DataFrame([['a', 1], ['b', 2]], columns=['x', 'y'], index=date_range)
-        try:
+        with self.assertRaises(TypeError):
             f2 = _convert_time_column(f1, time_index=True)
-            assert False
-        except TypeError:
-            pass
 
     def test_invalid_level_time_index(self):
         date_range = pd.date_range('2015-01-01', periods=2, freq='d')
         f1 = pd.DataFrame([['a', 1], ['b', 2]], columns=['x', 'y'], index=date_range)
-        try:
+        with self.assertRaises(IndexError):
             f2 = _convert_time_column(f1, time_index=1)
-            assert False
-        except IndexError:
-            pass
 
     def test_invalid_value_time_index(self):
         f1 = pd.DataFrame([['a', 1], ['b', 2]], columns=['x', 'y'])
-        try:
+        with self.assertRaises(TypeError):
             f2 = _convert_time_column(f1, time_index=0)
-            assert False
-        except TypeError:
-            pass
 
     def test_time_index(self):
         date_range = pd.date_range('2015-01-01', periods=2, freq='d')
@@ -548,20 +518,14 @@ class ToTdTestCase(TestCase):
     def test_invalid_level_time_index_multi(self):
         date_range = pd.date_range('2015-01-01', periods=2, freq='d')
         f1 = pd.DataFrame([['a', 1], ['b', 2]], columns=['x', 'y'], index=[[0, 1], date_range])
-        try:
+        with self.assertRaises(IndexError):
             f2 = _convert_time_column(f1, time_index=2)
-            assert False
-        except IndexError:
-            pass
 
     def test_invalid_value_time_index_multi(self):
         date_range = pd.date_range('2015-01-01', periods=2, freq='d')
         f1 = pd.DataFrame([['a', 1], ['b', 2]], columns=['x', 'y'], index=[[0, 1], date_range])
-        try:
+        with self.assertRaises(TypeError):
             f2 = _convert_time_column(f1, time_index=0)
-            assert False
-        except TypeError:
-            pass
 
     def test_time_index_multi(self):
         date_range = pd.date_range('2015-01-01', periods=2, freq='d')
@@ -573,11 +537,8 @@ class ToTdTestCase(TestCase):
 
     def test_invalid_index_type(self):
         f1 = pd.DataFrame([['a', 1], ['b', 2]], columns=['x', 'y'])
-        try:
+        with self.assertRaises(TypeError):
             f2 = _convert_index_column(f1, index=0)
-            assert False
-        except TypeError:
-            pass
 
     def test_no_index(self):
         f1 = pd.DataFrame([['a', 1], ['b', 2]], columns=['x', 'y'])
