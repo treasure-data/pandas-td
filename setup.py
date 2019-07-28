@@ -8,6 +8,15 @@ def read_version():
         m = re.match(r'__version__ = "([^\"]*)"', f.read())
         return m.group(1)
 
+requires = [
+    "certifi",
+    "pytz",
+    "tzlocal",
+    "pandas>=0.16.0",
+    "requests>=2.21.0",
+    "td-client>=0.4.0",
+]
+
 setup(
     name="pandas-td",
     version=read_version(),
@@ -15,7 +24,10 @@ setup(
     author="Treasure Data, Inc.",
     author_email="support@treasure-data.com",
     url="https://github.com/treasure-data/pandas-td",
-    install_requires=open("requirements.txt").read().splitlines(),
+    install_requires=requires,
+    extras_require={
+        "dev": ["pytest>=3.6", "pytest-cov"],
+    },
     packages=find_packages(),
     license="Apache License 2.0",
     platforms="Posix; MacOS X; Windows",

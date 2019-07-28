@@ -5,7 +5,6 @@ import importlib
 import os
 import pytz
 import re
-import six
 import traceback
 import tzlocal
 
@@ -74,7 +73,7 @@ class Session(object):
     def result(self):
         if self.job_future:
             r = self.job_future.result()
-            if isinstance(r, six.string_types):
+            if isinstance(r, str):
                 logger.error('%s', r)
                 return
         if self.download_future:

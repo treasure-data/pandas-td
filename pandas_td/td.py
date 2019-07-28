@@ -12,7 +12,6 @@ import zlib
 import msgpack
 import pandas as pd
 import requests
-import six
 import tdclient
 import tdclient.version
 
@@ -111,7 +110,7 @@ class QueryEngine(object):
         # name
         if self._header is False:
             header = ''
-        elif isinstance(self._header, six.string_types):
+        elif isinstance(self._header, str):
             header = "-- {0}\n".format(self._header)
         else:
             header = "-- {0}\n".format(name)
@@ -145,7 +144,7 @@ class QueryEngine(object):
     def _display_progress(self, job, cursize=None):
         if not self.show_progress:
             return
-        if isinstance(self.show_progress, six.integer_types) and hasattr(job, 'issued_at'):
+        if isinstance(self.show_progress, int) and hasattr(job, 'issued_at'):
             if datetime.datetime.utcnow() < job.issued_at + datetime.timedelta(seconds=self.show_progress):
                 return
         # header
@@ -613,9 +612,9 @@ def read_td_table(table_name, engine, index_col=None, parse_dates=None, columns=
 def _convert_time(time):
     if time is None:
         return "NULL"
-    elif isinstance(time, six.integer_types):
+    elif isinstance(time, int):
         t = pd.to_datetime(time, unit='s')
-    elif isinstance(time, six.string_types):
+    elif isinstance(time, str):
         t = pd.to_datetime(time)
     elif isinstance(time, (datetime.date, datetime.datetime)):
         t = pd.to_datetime(time)
@@ -725,14 +724,14 @@ def _convert_time_column(frame, time_col=None, time_index=None):
             frame.rename(columns={time_col: 'time'}, inplace=True)
         col = frame['time']
         # convert python string to pandas datetime
-        if col.dtype.name == 'object' and len(col) > 0 and isinstance(col[0], six.string_types):
+        if col.dtype.name == 'object' and len(col) > 0 and isinstance(col[0], str):
             col = pd.to_datetime(col)
         # convert pandas datetime to unixtime
         if col.dtype.name == 'datetime64[ns]':
             frame['time'] = col.astype('int64') // (10 ** 9)
     elif time_index is not None:
         # Use 'time_index' as time column
-        if type(time_index) is bool or not isinstance(time_index, six.integer_types):
+        if type(time_index) is bool or not isinstance(time_index, int):
             raise TypeError('invalid type for time_index')
         if isinstance(frame.index, pd.MultiIndex):
             idx = frame.index.levels[time_index]
