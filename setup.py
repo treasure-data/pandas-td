@@ -26,7 +26,7 @@ setup(
     url="https://github.com/treasure-data/pandas-td",
     install_requires=requires,
     extras_require={
-        "dev": ["pytest>=3.6", "pytest-cov", "black==19.3b0"],
+        "dev": ["pytest>=3.6", "pytest-cov", "black==19.3b0", "isort"],
     },
     packages=find_packages(),
     license="Apache License 2.0",
