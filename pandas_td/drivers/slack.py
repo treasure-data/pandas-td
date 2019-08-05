@@ -1,6 +1,7 @@
 import hashlib
 import json
 import os
+
 import requests
 
 from pandas_td.notifier import BaseNotifier

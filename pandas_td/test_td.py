@@ -1,31 +1,28 @@
-from .td import Connection
-from .td import QueryEngine
-from .td import ResultProxy
-from .td import StreamingUploader
-from .td import _convert_time_column
-from .td import _convert_index_column
-from .td import _convert_date_format
-
-from pandas_td import connect
-from pandas_td import read_td
-from pandas_td import read_td_query
-from pandas_td import read_td_job
-from pandas_td import read_td_table
-from pandas_td import to_td
-
 import collections
 import datetime
 import gzip
 import io
 import os
 import time
-import msgpack
-import tdclient
-import numpy as np
-import pandas as pd
-
 from unittest import TestCase
 from unittest.mock import MagicMock
+
+import msgpack
+import numpy as np
+import pandas as pd
+import tdclient
+
+from pandas_td import connect, read_td, read_td_job, read_td_query, read_td_table, to_td
+
+from .td import (
+    Connection,
+    QueryEngine,
+    ResultProxy,
+    StreamingUploader,
+    _convert_date_format,
+    _convert_index_column,
+    _convert_time_column,
+)
 
 # mocks
 

@@ -4,13 +4,14 @@ import argparse
 import os
 import re
 import sys
+
 import numpy as np
 import pandas as pd
-import pandas_td as td
 import pytz
 import tdclient
 
 import IPython
+import pandas_td as td
 from IPython.core import magic
 
 MAGIC_CONTEXT_NAME = "_td_magic"

@@ -1,21 +1,20 @@
 import concurrent.futures
 import datetime
-import multiprocessing
 import importlib
+import logging
+import multiprocessing
 import os
-import pytz
 import re
 import traceback
-import tzlocal
 
 import numpy as np
 import pandas as pd
-
-import logging
-
-logger = logging.getLogger(__name__)
+import pytz
+import tzlocal
 
 from pandas_td.td import create_engine
+
+logger = logging.getLogger(__name__)
 
 
 class Session(object):

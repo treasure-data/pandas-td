@@ -2,6 +2,7 @@ import contextlib
 import datetime
 import gzip
 import io
+import logging
 import re
 import sys
 import time
@@ -32,7 +33,6 @@ try:
 except ImportError:
     IPython = None
 
-import logging
 
 logger = logging.getLogger(__name__)
 

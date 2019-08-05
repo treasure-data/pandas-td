@@ -1,7 +1,8 @@
 import hashlib
 import os
-import requests
 import uuid
+
+import requests
 
 from pandas_td.notifier import BaseNotifier
 
