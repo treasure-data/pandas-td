@@ -1,4 +1,5 @@
 import logging
+
 logger = logging.getLogger(__name__)
 
 
@@ -11,17 +12,17 @@ class BaseNotifier(object):
 
 
 class LoggingNotifier(BaseNotifier):
-    '''
+    """
     Use Python logger for notifications.  This is not recommended because you will be
     interrupted by outputs from background threads during your interactive sessions.
-    '''
+    """
 
     def post_message(self, status, message, text=None, notify=True):
-        if status == 'info':
+        if status == "info":
             logger.info("%s", message)
             if text:
                 logger.info("%s", text)
-        elif status == 'warning':
+        elif status == "warning":
             logger.warning("%s", message)
             if text:
                 logger.warning("%s", text)
