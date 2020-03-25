@@ -1,4 +1,4 @@
-**NOTICE: pandas-td is no longer maintained. Use [pytd](https://github.com/treasure-data/pytd) instead.** 
+**NOTICE: pandas-td is no longer maintained and planned to be archived on GitHub on April 17, 2020. Use [pytd](https://github.com/treasure-data/pytd) instead.**
 
 See a [guide to replacing pandas-td with pytd](https://github.com/treasure-data/pytd#how-to-replace-pandas-td) and its [official documentation](https://support.treasuredata.com/hc/en-us/sections/360003775873-Python-Library-Reference-for-pytd-pandas-td-) for more information.
 
